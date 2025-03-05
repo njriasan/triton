@@ -23,12 +23,20 @@ void lowerDistributedToShared(Location loc, Value src, Value dst,
                               const TargetInfoBase &targetInfo) {
   auto srcTy = cast<RankedTensorType>(src.getType());
   auto dstTy = cast<MemDescType>(dst.getType());
-  auto inOrd = mlir::cast<BlockedEncodingAttr>(srcTy.getEncoding()).getOrder();
-  auto outOrd = mlir::cast<SharedEncodingAttr>(dstTy.getEncoding()).getOrder();
-  assert(srcTy.getShape().size() <= 2 ||
-         (srcTy.getShape().size() == 3 && outOrd[2] == 0) &&
-             "Unexpected rank of ConvertLayout(blocked->shared)");
-  bool crossGrain = inOrd[0] != outOrd[0];
+
+  bool crossGrain = false;
+
+  auto inEncoding = mlir::dyn_cast<BlockedEncodingAttr>(srcTy.getEncoding());
+  if (inEncoding) {
+    auto outEncoding = mlir::cast<SharedEncodingAttr>(dstTy.getEncoding());
+    auto inOrd = inEncoding.getOrder();
+    auto outOrd = outEncoding.getOrder();
+    crossGrain = (inOrd[0] != outOrd[0]) && outEncoding.getInThreadTranspose();
+    assert(srcTy.getRank() <= 2 ||
+           (srcTy.getRank() == 3 && outOrd[2] == 0) &&
+               "Unexpected rank of ConvertLayout(blocked->shared)");
+  }
+
   auto elemTy = typeConverter->convertType(srcTy.getElementType());
 
   auto smemBase = smemObj.getBase();

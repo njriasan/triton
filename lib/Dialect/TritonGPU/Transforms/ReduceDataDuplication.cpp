@@ -58,11 +58,14 @@ public:
       }
       auto sharedMemorySpace =
           triton::gpu::SharedMemorySpaceAttr::get(srcType.getContext());
+      bool enableThreadRake =
+          triton::gpu::SharedEncodingAttr::isThreadRakeLayout(srcEncoding);
       auto tmpType = triton::MemDescType::get(
           dstType.getShape(), dstType.getElementType(),
           triton::gpu::SharedEncodingAttr::get(
               mod.getContext(), dstDotOp, srcType.getShape(), sharedOrder,
-              triton::gpu::getCTALayout(srcEncoding), srcType.getElementType()),
+              triton::gpu::getCTALayout(srcEncoding), srcType.getElementType(),
+              enableThreadRake),
           sharedMemorySpace);
       auto tmp = builder.create<triton::gpu::LocalAllocOp>(
           cvtOp.getLoc(), tmpType, cvtOp.getSrc());

@@ -92,12 +92,14 @@ void decomposeBlockedToDotLayoutConversion(ModuleOp module) {
     if (srcBlocked && dstDotOp) {
       Attribute sharedMemorySpace =
           triton::gpu::SharedMemorySpaceAttr::get(srcType.getContext());
+      bool enableThreadRake =
+          triton::gpu::SharedEncodingAttr::isThreadRakeLayout(srcBlocked);
       auto tmpType = MemDescType::get(
           dstType.getShape(), dstType.getElementType(),
           triton::gpu::SharedEncodingAttr::get(
               module.getContext(), dstDotOp, srcType.getShape(),
               srcBlocked.getOrder(), srcBlocked.getCTALayout(),
-              srcType.getElementType()),
+              srcType.getElementType(), enableThreadRake),
           sharedMemorySpace);
       auto tmp = builder.create<triton::gpu::LocalAllocOp>(
           cvtOp.getLoc(), tmpType, cvtOp.getSrc());

@@ -55,7 +55,7 @@ public:
         triton::gpu::SharedEncodingAttr::get(
             op.getContext(), dstDotOp, type.getShape(),
             triton::gpu::getOrder(parentEnc),
-            triton::gpu::getCTALayout(parentEnc), type.getElementType()),
+            triton::gpu::getCTALayout(parentEnc), type.getElementType(), false),
         srcType.getMemorySpace());
     auto tmp = rewriter.create<triton::gpu::LocalAllocOp>(
         op.getLoc(), newSharedDescTy, load);

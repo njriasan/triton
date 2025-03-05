@@ -265,9 +265,10 @@ compared to 1*64 when the hasLeadingOffset is false.
                      "ArrayRef<int64_t>":$shape,
                      "ArrayRef<unsigned>":$order,
                      "CTALayoutAttr":$CTALayout,
-                     "unsigned":$typeWidthInBit), [{
+                     "unsigned":$typeWidthInBit,
+                     "bool":$enableThreadRake), [{
         bool needTrans = false; // default value
-        return get(context, dotOpEnc, shape, order, CTALayout, typeWidthInBit, needTrans);
+        return get(context, dotOpEnc, shape, order, CTALayout, typeWidthInBit, needTrans, enableThreadRake);
     }]>,
 
     // TODO(jlebar): This should not be an overload of
@@ -278,7 +279,8 @@ compared to 1*64 when the hasLeadingOffset is false.
                      "ArrayRef<unsigned>":$order,
                      "CTALayoutAttr":$CTALayout,
                      "unsigned":$typeWidthInBit,
-                     "bool":$needTrans), [{
+                     "bool":$needTrans,
+                     "bool":$enableThreadRake), [{
 
         // ---- begin GFX908/GFX90A ----
         if (auto mfmaEnc = mlir::dyn_cast<AMDMfmaEncodingAttr>(dotOpEnc.getParent())) {
@@ -309,10 +311,14 @@ compared to 1*64 when the hasLeadingOffset is false.
           if (isKDimInner) {
             return get(context, vecSize, perPhase, maxPhase, order, CTALayout);
           } else {
-            SmallVector<unsigned int> newOrder(order);
-            std::swap(newOrder[0], newOrder[1]);
-            // set inThreadTranspose to true since we want to use special swizzling
-            return $_get(context, vecSize, perPhase, maxPhase, newOrder, CTALayout, false, true);
+            if (enableThreadRake) {
+              SmallVector<unsigned int> newOrder(order);
+              std::swap(newOrder[0], newOrder[1]);
+              // set inThreadTranspose to true since we want to use special swizzling
+              return $_get(context, vecSize, perPhase, maxPhase, newOrder, CTALayout, false, true);
+            } else {
+              return get(context, 1, 1, 1, order, CTALayout);
+            }
           }
         }
 
@@ -418,9 +424,10 @@ compared to 1*64 when the hasLeadingOffset is false.
                      "ArrayRef<int64_t>":$shape,
                      "ArrayRef<unsigned>":$order,
                      "CTALayoutAttr":$CTALayout,
-                     "Type":$eltTy), [{
+                     "Type":$eltTy,
+                     "bool":$enableThreadRake), [{
       unsigned bitwidth = eltTy.getIntOrFloatBitWidth();
-      return get(context, dotOpEnc, shape, order, CTALayout, bitwidth);
+      return get(context, dotOpEnc, shape, order, CTALayout, bitwidth, enableThreadRake);
     }]>,
 
     AttrBuilder<(ins "DotOperandEncodingAttr":$dotOpEnc,
@@ -428,9 +435,10 @@ compared to 1*64 when the hasLeadingOffset is false.
                      "ArrayRef<unsigned>":$order,
                      "CTALayoutAttr":$CTALayout,
                      "Type":$eltTy,
-                     "bool":$needTrans), [{
+                     "bool":$needTrans,
+                     "bool":$enableThreadRake), [{
       unsigned bitwidth = eltTy.getIntOrFloatBitWidth();
-      return get(context, dotOpEnc, shape, order, CTALayout, bitwidth, needTrans);
+      return get(context, dotOpEnc, shape, order, CTALayout, bitwidth, needTrans, enableThreadRake);
     }]>,
 
     AttrBuilder<(ins "ArrayRef<int64_t>":$shape,
@@ -462,7 +470,9 @@ compared to 1*64 when the hasLeadingOffset is false.
     }]>
   ];
 
-  let extraClassDeclaration = extraBaseClassDeclaration;
+  let extraClassDeclaration = extraBaseClassDeclaration # [{
+    static bool isThreadRakeLayout(Attribute loadEncoding);
+  }];
   let hasCustomAssemblyFormat = 1;
 }
 

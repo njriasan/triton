@@ -956,6 +956,14 @@ unsigned SharedEncodingAttr::getTotalElemsPerThread(ArrayRef<int64_t> shape,
   return 0;
 }
 
+bool SharedEncodingAttr::isThreadRakeLayout(Attribute loadEncoding) {
+  auto loadBlockedEnc =
+      mlir::dyn_cast<triton::gpu::BlockedEncodingAttr>(loadEncoding);
+  if (!loadBlockedEnc)
+    return false;
+  return loadBlockedEnc.getSizePerThread()[loadBlockedEnc.getOrder()[1]] != 1;
+}
+
 SmallVector<unsigned>
 DotOperandEncodingAttr::getElemsPerThread(ArrayRef<int64_t> shape,
                                           Type eltTy) const {
@@ -1546,10 +1554,9 @@ Attribute SharedEncodingAttr::parse(AsmParser &parser, Type type) {
   if (!CTALayout.has_value())
     return {};
 
-  return parser.getChecked<SharedEncodingAttr>(parser.getContext(), vec,
-                                               perPhase, maxPhase, order,
-                                               *CTALayout, hasLeadingOffset,
-                                               inThreadTranspose);
+  return parser.getChecked<SharedEncodingAttr>(
+      parser.getContext(), vec, perPhase, maxPhase, order, *CTALayout,
+      hasLeadingOffset, inThreadTranspose);
 }
 
 void SharedEncodingAttr::print(AsmPrinter &printer) const {
