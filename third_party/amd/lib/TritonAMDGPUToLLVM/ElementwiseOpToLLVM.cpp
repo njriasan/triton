@@ -307,36 +307,44 @@ static Value convertBf16ToFp32(Location loc,
   return bitcast(shifted, f32_ty);
 }
 
+static Value checkIsNan(Location loc, ConversionPatternRewriter &rewriter, Value v) {
+  StringRef intrinsic = "llvm.is.fpclass";
+  // bits 0 and 1 indicate signaling Nan and quiet Nan, respectively
+  Value nanBits = i32_val(3);
+
+  return LLVM::createLLVMIntrinsicCallOp(rewriter, loc, intrinsic, i1_ty,
+                                         ValueRange{v, nanBits})
+      ->getResult(0);
+}
+
 static Value convertFp32ToBf16(Location loc,
                                ConversionPatternRewriter &rewriter,
                                const Value &v, const RoundingMode rounding) {
+  auto as_int32 = bitcast(v, i32_ty);
   if (rounding == RoundingMode::RTZ) {
-    auto as_int32 = bitcast(v, i32_ty);
     auto shifted = lshr(i32_ty, as_int32, i32_val(16));
     auto truncated = trunc(i16_ty, shifted);
     return bitcast(truncated, bf16_ty);
   }
-  // Otherwise it is (rounding == RoundingMode::RTNE)
-  auto as_uint32 = bitcast(v, i32_ty);
-  auto check_exponent =
-      and_(i32_ty, xor_(i32_ty, as_uint32, i32_val(0xffffffff)),
-           i32_val(0x7f800000));
-  auto exponent_not_all1s = icmp_ne(check_exponent, i32_val(0));
-  auto exponent_all1s = icmp_eq(check_exponent, i32_val(0));
-  auto rounded =
-      add(i32_ty, i32_val(0x7fff),
-          and_(i32_ty, lshr(i32_ty, as_uint32, i32_val(16)), i32_val(1)));
-  rounded = add(i32_ty, rounded, as_uint32);
-  auto res = select(exponent_not_all1s, rounded, as_uint32);
 
-  auto preserve_nan =
-      and_(i1_ty, exponent_all1s,
-           icmp_ne(and_(i32_ty, as_uint32, i32_val(0xffff)), i32_val(0)));
-  auto nan = or_(i32_ty, as_uint32, i32_val(0x10000));
-  res = select(preserve_nan, nan, res);
+  // This implementation is a faster version for fp32 to bf16 type conversion
+  // It is from CK:
+  // https://github.com/cgmillette/composable_kernel/commit/24e75bef6aa5
+  // It uses less VGPR and less number of instructions compared to the
+  // previous implementation
+  Value isNan = checkIsNan(loc, rewriter, v);
+  Value v16 = i32_val(16);
+  Value tmp = and_(i32_ty, lshr(i32_ty, as_int32, v16), i32_val(1));
 
-  auto shifted = lshr(i32_ty, res, i32_val(16));
-  auto truncated = trunc(i16_ty, shifted);
+  Value v7FFF = i32_val(0x7FFF);
+  Value s1 = add(as_int32, tmp);
+  Value s2 = add(s1, v7FFF);
+
+  Value vNan = i32_val(0x7FFF0000);
+  Value res = select(isNan, vNan, s2);
+
+  Value shifted = lshr(i32_ty, res, v16);
+  Value truncated = trunc(i16_ty, shifted);
   return bitcast(truncated, bf16_ty);
 }
 
