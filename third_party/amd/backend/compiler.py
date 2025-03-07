@@ -222,7 +222,7 @@ class HIPBackend(BaseBackend):
         passes.ttgpuir.add_remove_layout_conversions(pm)
         if options.enable_thread_rake:
             amd.passes.ttgpuir.add_in_thread_tranpose(pm)
-        passes.ttgpuir.add_remove_layout_conversions(pm)
+            passes.ttgpuir.add_remove_layout_conversions(pm)
         amd.passes.ttgpuir.add_optimize_epilogue(pm)
         passes.ttgpuir.add_optimize_dot_operands(pm, True)
         if amd.has_matrix_core_feature(options.arch):
