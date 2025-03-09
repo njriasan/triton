@@ -22,6 +22,9 @@ namespace {
 // encoding.
 class SwizzleShmemConvert : public OpRewritePattern<ConvertLayoutOp> {
 public:
+  SwizzleShmemConvert(MLIRContext *context, bool enableInThreadTranspose) 
+    : OpRewritePattern<ConvertLayoutOp>(context),
+    enableInThreadTranspose(enableInThreadTranspose) {}
   using OpRewritePattern::OpRewritePattern;
 
   LogicalResult matchAndRewrite(ConvertLayoutOp cvtOp,
@@ -56,7 +59,7 @@ public:
         SharedEncodingAttr::get(getContext(), cvtEncoding, srcTy.getShape(),
                                 /*order=*/getOrder(srcTy.getEncoding()),
                                 triton::gpu::getCTALayout(srcTy.getEncoding()),
-                                srcTy.getElementType(), /*needTrans=*/true);
+                                srcTy.getElementType(), /*needTrans=*/true, enableInThreadTranspose);
     if (newInnerCvtEnc == cvtEncoding)
       return failure();
     rewriter.setInsertionPoint(trans);
@@ -71,6 +74,8 @@ public:
     rewriter.replaceOpWithNewOp<LocalLoadOp>(trans, sharedLoadTy, newTrans);
     return success();
   }
+private:
+  bool enableInThreadTranspose;
 };
 
 // Move convert-to-dot-operand "up" past elementwise ops:
@@ -247,7 +252,6 @@ public:
     auto newInnerEnc = SharedEncodingAttr::get(
         getContext(), srcTy.getShape(), newInnerCvtOrder,
         allocEncoding.getCTALayout(), srcTy.getElementType());
-
     MemDescType innerTy =
         MemDescType::get(srcTy.getShape(), srcTy.getElementType(), newInnerEnc,
                          allocType.getMemorySpace());
@@ -321,7 +325,7 @@ public:
     auto ret = pm.run(m);
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<SwizzleShmemConvert>(context);
+    patterns.add<SwizzleShmemConvert>(context, this->inThreadTranspose.getValue());
     if (this->hoistLayoutConversion.getValue())
       patterns.add<HoistLayoutConversion>(context);
     patterns.add<FuseTransHopper>(context);

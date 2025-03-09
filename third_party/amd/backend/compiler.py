@@ -224,7 +224,7 @@ class HIPBackend(BaseBackend):
             amd.passes.ttgpuir.add_in_thread_tranpose(pm)
             passes.ttgpuir.add_remove_layout_conversions(pm)
         amd.passes.ttgpuir.add_optimize_epilogue(pm)
-        passes.ttgpuir.add_optimize_dot_operands(pm, True)
+        passes.ttgpuir.add_optimize_dot_operands(pm, True, options.enable_thread_rake)
         if amd.has_matrix_core_feature(options.arch):
             assert options.num_stages != 0, ("Triton AMD backend pipeliner has been updated. "
                                              "We used to trigger software pipelining with "
@@ -234,7 +234,7 @@ class HIPBackend(BaseBackend):
             amd.passes.ttgpuir.add_stream_pipelinev2(pm, options.num_stages)
             passes.common.add_canonicalizer(pm)
         amd.passes.ttgpuir.insert_instruction_sched_hints(pm)
-        passes.ttgpuir.add_optimize_dot_operands(pm, True)
+        passes.ttgpuir.add_optimize_dot_operands(pm, True, options.enable_thread_rake)
         passes.ttgpuir.add_remove_layout_conversions(pm)
         passes.ttgpuir.add_reduce_data_duplication(pm)
         if amd.has_matrix_core_feature(options.arch):

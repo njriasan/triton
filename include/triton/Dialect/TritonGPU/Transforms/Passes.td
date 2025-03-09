@@ -87,7 +87,10 @@ def TritonGPUOptimizeDotOperands : Pass<"tritongpu-optimize-dot-operands", "mlir
   let options = [
     Option<"hoistLayoutConversion", "hoist-layout-conversion",
            "bool", /*default*/"true",
-           "whether to move conver to dot operand earlier pass elementwise ops">
+           "whether to move conver to dot operand earlier pass elementwise ops">,
+    Option<"inThreadTranspose", "in-thread-transpose",
+           "bool", /*default*/"false",
+           "whether to turn on the in-thread-tranpose feature">
   ];
 }
 

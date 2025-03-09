@@ -56,8 +56,8 @@ void init_triton_passes_ttgpuir(py::module &&m) {
   ADD_PASS_WRAPPER_0("add_reorder_instructions",
                      createTritonGPUReorderInstructions);
   ADD_PASS_WRAPPER_0("add_f32_dot_tc", createTritonGPUF32DotTC);
-  ADD_PASS_OPTION_WRAPPER_1("add_optimize_dot_operands",
-                            createTritonGPUOptimizeDotOperands, bool);
+  ADD_PASS_OPTION_WRAPPER_2("add_optimize_dot_operands",
+                            createTritonGPUOptimizeDotOperands, bool, bool);
   ADD_PASS_WRAPPER_0("add_remove_layout_conversions",
                      createTritonGPURemoveLayoutConversions);
   ADD_PASS_WRAPPER_0("add_reduce_data_duplication",
