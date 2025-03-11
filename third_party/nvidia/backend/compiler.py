@@ -226,7 +226,7 @@ class CUDABackend(BaseBackend):
         passes.ttgpuir.add_optimize_thread_locality(pm)
         passes.ttgpuir.add_accelerate_matmul(pm)
         passes.ttgpuir.add_remove_layout_conversions(pm)
-        passes.ttgpuir.add_optimize_dot_operands(pm, capability >= 80)
+        passes.ttgpuir.add_optimize_dot_operands(pm, capability >= 80, False)
         passes.common.add_cse(pm)
         if capability // 10 >= 8:
             passes.ttgpuir.add_optimize_accumulator_init(pm)
@@ -239,7 +239,7 @@ class CUDABackend(BaseBackend):
             passes.ttgpuir.add_pipeline(pm, opt.num_stages)
             passes.ttgpuir.add_ws_lowering(pm, opt.num_consumer_groups)
         passes.ttgpuir.add_prefetch(pm)
-        passes.ttgpuir.add_optimize_dot_operands(pm, capability >= 80)
+        passes.ttgpuir.add_optimize_dot_operands(pm, capability >= 80, False)
         passes.ttgpuir.add_remove_layout_conversions(pm)
         passes.ttgpuir.add_reduce_data_duplication(pm)
         passes.ttgpuir.add_reorder_instructions(pm)
