@@ -413,8 +413,14 @@ void storeDistributedToShared(MemDescType dstTy, RankedTensorType srcTy,
                               const TargetInfoBase &target, bool crossGrain) {
   bool success;
   std::function<void(VectorType, Value /*shmemAddr*/)> perVectorCallback;
+  // Initialize variables in a safe scope. These variables will be bound
+  // to the lambda function.
+  // TODO: Enforce that crossGrain=True is only for AMD
+  unsigned int numElementsPerIter = 1;
+  unsigned int innerVectorization = 1;
+  unsigned int val_counter = 0;
   if (!crossGrain) {
-    perVectorCallback = [&](VectorType vecTy, Value vecAddr) {
+    perVectorCallback = [&srcVals, &elemLlvmTy, &loc, &rewriter](VectorType vecTy, Value vecAddr) {
           ArrayRef<Value> vals = srcVals.take_front(vecTy.getNumElements());
           srcVals = srcVals.drop_front(vecTy.getNumElements());
 
@@ -426,14 +432,12 @@ void storeDistributedToShared(MemDescType dstTy, RankedTensorType srcTy,
               .setAlignment(vecTy.getNumElements() *
                             elemLlvmTy.getIntOrFloatBitWidth() / 8);
         };
-  } else {
-    auto blockedEncoding = dyn_cast<BlockedEncodingAttr>(srcTy.getEncoding());
+  } else if (auto blockedEncoding = dyn_cast<BlockedEncodingAttr>(srcTy.getEncoding())) {
     auto sizePerThread = blockedEncoding.getSizePerThread();
     auto order = blockedEncoding.getOrder();
-    unsigned int numElementsPerIter = product<unsigned>(sizePerThread);
-    unsigned int val_counter = 0;
-    unsigned int innerVectorization = sizePerThread[order[0]];
-    perVectorCallback = [&](VectorType vecTy, Value vecAddr) {
+    numElementsPerIter = product<unsigned>(sizePerThread);
+    innerVectorization = sizePerThread[order[0]];
+    perVectorCallback = [&srcVals, &elemLlvmTy, &loc, &rewriter, &val_counter, &innerVectorization, &numElementsPerIter](VectorType vecTy, Value vecAddr) {
           Value vec = undef(vecTy);
           for (int i = 0; i < vecTy.getNumElements(); i++) {
               auto idx = val_counter % innerVectorization +
@@ -446,6 +450,8 @@ void storeDistributedToShared(MemDescType dstTy, RankedTensorType srcTy,
               .setAlignment(vecTy.getNumElements() *
                             elemLlvmTy.getIntOrFloatBitWidth() / 8);
         };
+  } else {
+    llvm::report_fatal_error("Failed to detect block encoding");
   }
   success = emitTransferBetweenRegistersAndShared(
         srcTy, dstTy, elemLlvmTy, /*maxVecElems=*/std::nullopt, smemBase,
