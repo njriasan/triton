@@ -32,7 +32,8 @@ std::unique_ptr<Pass> createTritonAMDGPUCanonicalizePointersPass();
 std::unique_ptr<Pass> createTritonAMDGPUConvertToBufferOpsPass(
     std::string archGenName = std::string());
 
-std::unique_ptr<Pass> createTritonAMDGPUBlockPingpongPass();
+std::unique_ptr<Pass> createTritonAMDGPUBlockPingpongPass(
+    int64_t conditionalTileSizeHeuristic = 33554432);
 
 std::unique_ptr<Pass> createTritonAMDGPUInThreadTransposePass();
 
