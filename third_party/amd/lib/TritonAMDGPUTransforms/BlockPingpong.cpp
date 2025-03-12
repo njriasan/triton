@@ -846,6 +846,9 @@ public:
       });
     }
   }
+
+private:
+  int64_t conditionalTileSizeHeuristic = 33554432;
 };
 } // namespace
 
