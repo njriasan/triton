@@ -167,7 +167,7 @@ def TritonAMDGPUBlockPingpong: Pass<"tritonamdgpu-block-pingpong", "mlir::Module
 
   let options = [
     Option<"conditionalTileSizeHeuristic", "conditional-tile-size-heuristic",
-           "int64_t", /*default=*/"0",
+           "int64_t", /*default=*/"33554432",
            "Tile size threshold used to determine when persistent prologue/epilogue memory loads/stores should be ignored.">,
   ];
 }
