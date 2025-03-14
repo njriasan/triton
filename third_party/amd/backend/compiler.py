@@ -17,7 +17,6 @@ def min_dot_size(target: GPUTarget):
     return lambda lhsType, rhsType: (1, 1, 1)
 
 
-
 def is_pingpong_enabled(arch):
     default = "1" if arch == "gfx942" else "0"
     return os.getenv("TRITON_HIP_USE_BLOCK_PINGPONG", default) == "1"
@@ -282,9 +281,7 @@ class HIPBackend(BaseBackend):
             amd.passes.ttgpuir.add_reorder_instructions(pm)
             use_block_pingpong = is_pingpong_enabled(options.arch)
             if use_block_pingpong and options.num_stages == 2:
-                amd.passes.ttgpuir.add_block_pingpong(
-                    pm, ping_pong_conditional_threshold()
-                )
+                amd.passes.ttgpuir.add_block_pingpong(pm, ping_pong_conditional_threshold())
 
         if HIPBackend.use_buffer_ops():
             amd.passes.ttgpuir.add_canonicalize_pointers(pm)
