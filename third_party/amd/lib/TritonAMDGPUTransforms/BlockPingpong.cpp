@@ -842,15 +842,10 @@ class TritonAMDGPUBlockPingpongPass
     : public TritonAMDGPUBlockPingpongBase<TritonAMDGPUBlockPingpongPass> {
 public:
   TritonAMDGPUBlockPingpongPass() = default;
-<<<<<<< HEAD
   TritonAMDGPUBlockPingpongPass(int32_t numStages,
                                 int64_t conditionalTileSizeHeuristic) {
     this->numStages = numStages;
     this->conditionalTileSizeHeuristic = conditionalTileSizeHeuristic;
-=======
-  TritonAMDGPUBlockPingpongPass(int64_t _conditionalTileSizeHeuristic) {
-    this->conditionalTileSizeHeuristic = _conditionalTileSizeHeuristic;
->>>>>>> ba7e54b2 (Fixed remaining existing tests)
   }
   void runOnOperation() override {
     ModuleOp m = getOperation();
