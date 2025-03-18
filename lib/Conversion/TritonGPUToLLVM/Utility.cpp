@@ -447,10 +447,9 @@ void storeDistributedToShared(MemDescType dstTy, RankedTensorType srcTy,
                          &numElementsPerIter](VectorType vecTy, Value vecAddr) {
       Value vec = undef(vecTy);
       for (int i = 0; i < vecTy.getNumElements(); i++) {
-        auto inner_offset = val_outer_counter % innerVectorization;
-        auto outer_offset = val_inner_counter * innerVectorization;
-        auto row_offset = val_outer_counter / innerVectorization;
-        auto idx = inner_offset + outer_offset + row_offset;
+        auto column_offset = val_outer_counter % innerVectorization;
+        auto row_offset = val_inner_counter * innerVectorization;
+        auto idx = row_offset + column_offset;
         val_inner_counter = (val_inner_counter + 1) % outer_dim;
         if (val_inner_counter == 0)
           val_outer_counter++;
