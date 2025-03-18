@@ -28,13 +28,16 @@ void lowerDistributedToShared(Location loc, Value src, Value dst,
 
   auto inEncoding = mlir::dyn_cast<BlockedEncodingAttr>(srcTy.getEncoding());
   if (inEncoding) {
-    auto outEncoding = mlir::cast<SharedEncodingAttr>(dstTy.getEncoding());
-    auto inOrd = inEncoding.getOrder();
-    auto outOrd = outEncoding.getOrder();
-    crossGrain = (inOrd[0] != outOrd[0]) && outEncoding.getInThreadTranspose();
-    assert(srcTy.getRank() <= 2 ||
-           (srcTy.getRank() == 3 && outOrd[2] == 0) &&
-               "Unexpected rank of ConvertLayout(blocked->shared)");
+    auto outEncoding = mlir::dyn_cast<SharedEncodingAttr>(dstTy.getEncoding());
+    if (outEncoding) {
+      auto inOrd = inEncoding.getOrder();
+      auto outOrd = outEncoding.getOrder();
+      crossGrain =
+          (inOrd[0] != outOrd[0]) && outEncoding.getInThreadTranspose();
+      assert(srcTy.getRank() <= 2 ||
+             (srcTy.getRank() == 3 && outOrd[2] == 0) &&
+                 "Unexpected rank of ConvertLayout(blocked->shared)");
+    }
   }
 
   auto elemTy = typeConverter->convertType(srcTy.getElementType());
