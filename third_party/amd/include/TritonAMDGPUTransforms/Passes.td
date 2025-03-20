@@ -166,7 +166,7 @@ def TritonAMDGPUBlockPingpong: Pass<"tritonamdgpu-block-pingpong", "mlir::Module
   let dependentDialects = ["mlir::ROCDL::ROCDLDialect, mlir::triton::amdgpu::TritonAMDGPUDialect"];
 
   let options = [
-    Option<"numStages", "num_stages",
+    Option<"numStages", "num-stages",
         "int32_t", /*default*/"2",
         "Number of Pipeline stages">,
     Option<"conditionalTileSizeHeuristic", "conditional-tile-size-heuristic",
