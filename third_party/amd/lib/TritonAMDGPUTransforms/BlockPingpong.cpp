@@ -67,7 +67,6 @@ class Pingponger {
   SmallVector<Operation *> dotSliceOps;
   SmallVector<Value> constOffsets;
   Operation *lastInsertedOp;
-  int64_t conditionalTileSizeHeuristic;
 
   // rocdl.s.setprio will be mapped to `s_setprio` instruction which set the
   // priority of the warp within a SIMD, determines which warp to occupy the
@@ -80,11 +79,13 @@ class Pingponger {
   int highPriority = 1;
   int32_t kWidth;
   int32_t numWarps;
+  int32_t num_stages;
+  int64_t conditionalTileSizeHeuristic;
 
 public:
-  Pingponger(scf::ForOp forOp, int32_t numWarps,
+  Pingponger(scf::ForOp forOp, int32_t numWarps, int32_t num_stages,
              int64_t _conditionalTileSizeHeuristic)
-      : forOp(forOp), numWarps(numWarps),
+      : forOp(forOp), numWarps(numWarps), num_stages(num_stages),
         conditionalTileSizeHeuristic(_conditionalTileSizeHeuristic) {}
   void getDotPingponged();
 
@@ -833,14 +834,16 @@ class TritonAMDGPUBlockPingpongPass
     : public TritonAMDGPUBlockPingpongBase<TritonAMDGPUBlockPingpongPass> {
 public:
   TritonAMDGPUBlockPingpongPass() = default;
-  TritonAMDGPUBlockPingpongPass(int64_t _conditionalTileSizeHeuristic) {
+  TritonAMDGPUBlockPingpongPass(
+      int32_t num_stages int64_t _conditionalTileSizeHeuristic) {
+    this->numStages = num_stages;
     this->conditionalTileSizeHeuristic = _conditionalTileSizeHeuristic;
   }
   void runOnOperation() override {
     ModuleOp m = getOperation();
     for (auto funcOp : m.getOps<tt::FuncOp>()) {
       funcOp.walk([&](scf::ForOp forOp) {
-        Pingponger pingponger(forOp, ttg::lookupNumWarps(forOp),
+        Pingponger pingponger(forOp, ttg::lookupNumWarps(forOp), num_stages,
                               conditionalTileSizeHeuristic);
         pingponger.getDotPingponged();
       });
@@ -853,7 +856,7 @@ private:
 } // namespace
 
 std::unique_ptr<Pass> mlir::createTritonAMDGPUBlockPingpongPass(
-    int64_t conditionalTileSizeHeuristic) {
+    int32_t num_stages, int64_t conditionalTileSizeHeuristic) {
   return std::make_unique<TritonAMDGPUBlockPingpongPass>(
-      conditionalTileSizeHeuristic);
+      num_stages, conditionalTileSizeHeuristic);
 }
