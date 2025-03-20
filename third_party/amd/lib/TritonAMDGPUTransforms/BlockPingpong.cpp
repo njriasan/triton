@@ -67,7 +67,6 @@ class Pingponger {
   SmallVector<Operation *> dotSliceOps;
   SmallVector<Value> constOffsets;
   Operation *lastInsertedOp;
-  int64_t conditionalTileSizeHeuristic;
 
   // rocdl.s.setprio will be mapped to `s_setprio` instruction which set the
   // priority of the warp within a SIMD, determines which warp to occupy the
@@ -81,6 +80,7 @@ class Pingponger {
   int32_t kWidth;
   int32_t numWarps;
   int32_t numStages;
+  int64_t conditionalTileSizeHeuristic;
 
 public:
   Pingponger(scf::ForOp forOp, int32_t numWarps, int32_t numStages,
@@ -635,6 +635,7 @@ void Pingponger::addAsymmetricSyncToLoop(OpBuilder &builder, Location loc) {
 }
 
 void Pingponger::getDotPingponged() {
+  // TODO: Remove when we have example num_stages = 1 codepaths working.
   if (numStages != 2) {
     std::stringstream message;
     message << "All ping pong scheduling requires 2 stages. Found " << numStages
@@ -651,14 +652,18 @@ void Pingponger::getDotPingponged() {
     if (auto gLoad = dyn_cast<tt::LoadOp>(op))
       gLoadOps.push_back(gLoad);
     else if (auto lLoad = dyn_cast<ttg::LocalLoadOp>(op)) {
-      // This scheduling doesn't help hiding intra-warp latency. So, we only
-      // collect local_load ops that are software pipelined, which means their
-      // source is from loop carried values
       auto src = lLoad.getSrc();
-      if (auto arg = mlir::dyn_cast<BlockArgument>(src))
-        if (auto tiedLoopInit = forOp.getTiedLoopInit(arg))
-          if (tiedLoopInit->get())
-            lLoadOps.push_back(lLoad);
+      if (numStages == 2) {
+        // This scheduling doesn't help hiding intra-warp latency. So, we only
+        // collect local_load ops that are software pipelined, which means their
+        // source is from loop carried values
+        if (auto arg = mlir::dyn_cast<BlockArgument>(src))
+          if (auto tiedLoopInit = forOp.getTiedLoopInit(arg))
+            if (tiedLoopInit->get())
+              lLoadOps.push_back(lLoad);
+      } else {
+        lLoadOps.push_back(lLoad);
+      }
     } else if (auto lStore = dyn_cast<ttg::LocalStoreOp>(op))
       lStoreOps.push_back(lStore);
     else if (auto pingpongDot = dyn_cast<tt::DotOp>(op))

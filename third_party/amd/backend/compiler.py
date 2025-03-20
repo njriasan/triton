@@ -22,6 +22,15 @@ def is_pingpong_enabled(arch):
     return os.getenv("TRITON_HIP_USE_BLOCK_PINGPONG", default) == "1"
 
 
+def is_pingpong_attention_enabled(arch):
+    default = "1" if arch == "gfx942" else "0"
+    return os.getenv("TRITON_HIP_USE_BLOCK_PINGPONG_ATTENTION", default) == "1"
+
+
+def use_pingpong(arch, num_stages):
+    return is_pingpong_enabled(arch) and (num_stages == 2 or is_pingpong_attention_enabled(arch))
+
+
 def ping_pong_conditional_threshold():
     """
     Determines a heuristic threshold (>=) for blocksize that is used to determine
@@ -279,8 +288,8 @@ class HIPBackend(BaseBackend):
             passes.ttgpuir.add_remove_layout_conversions(pm)
         if amd.has_matrix_core_feature(options.arch):
             amd.passes.ttgpuir.add_reorder_instructions(pm)
-            use_block_pingpong = is_pingpong_enabled(options.arch)
-            if use_block_pingpong and options.num_stages == 2:
+            use_block_pingpong = use_pingpong(options.arch, options.num_stages)
+            if use_block_pingpong:
                 amd.passes.ttgpuir.add_block_pingpong(pm, options.num_stages, ping_pong_conditional_threshold())
 
         if HIPBackend.use_buffer_ops():
