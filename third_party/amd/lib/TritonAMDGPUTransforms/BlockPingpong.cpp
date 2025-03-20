@@ -635,6 +635,7 @@ void Pingponger::addAsymmetricSyncToLoop(OpBuilder &builder, Location loc) {
 }
 
 void Pingponger::getDotPingponged() {
+  // TODO: Remove when we have example num_stages = 1 codepaths working.
   if (numStages != 2) {
     std::stringstream message;
     message << "All ping pong scheduling requires 2 stages. Found " << numStages
@@ -652,7 +653,7 @@ void Pingponger::getDotPingponged() {
       gLoadOps.push_back(gLoad);
     else if (auto lLoad = dyn_cast<ttg::LocalLoadOp>(op)) {
       auto src = lLoad.getSrc();
-      if (num_stages == 2) {
+      if (numStages == 2) {
         // This scheduling doesn't help hiding intra-warp latency. So, we only
         // collect local_load ops that are software pipelined, which means their
         // source is from loop carried values
@@ -669,15 +670,6 @@ void Pingponger::getDotPingponged() {
       if (pingpongDot.getType().getRank() == 2)
         dotOps.push_back(pingpongDot);
   });
-
-  // TODO: Remove when we have example num_stages = 1 codepaths working.
-  if (num_stages != 2) {
-    std::stringstream message;
-    message << "All ping pong scheduling requires 2 stages. Found "
-            << num_stages << " stages";
-    LDBG(message.str());
-    return;
-  }
 
   // Currently, pingpong scheduling is known as helpful under limited condition.
   // Individual conditions are checked while collecting each operation such as
