@@ -643,20 +643,33 @@ void Pingponger::getDotPingponged() {
     if (auto gLoad = dyn_cast<tt::LoadOp>(op))
       gLoadOps.push_back(gLoad);
     else if (auto lLoad = dyn_cast<ttg::LocalLoadOp>(op)) {
-      // This scheduling doesn't help hiding intra-warp latency. So, we only
-      // collect local_load ops that are software pipelined, which means their
-      // source is from loop carried values
       auto src = lLoad.getSrc();
-      if (auto arg = mlir::dyn_cast<BlockArgument>(src))
-        if (auto tiedLoopInit = forOp.getTiedLoopInit(arg))
-          if (tiedLoopInit->get())
-            lLoadOps.push_back(lLoad);
+      if (num_stages == 2) {
+        // This scheduling doesn't help hiding intra-warp latency. So, we only
+        // collect local_load ops that are software pipelined, which means their
+        // source is from loop carried values
+        if (auto arg = mlir::dyn_cast<BlockArgument>(src))
+          if (auto tiedLoopInit = forOp.getTiedLoopInit(arg))
+            if (tiedLoopInit->get())
+              lLoadOps.push_back(lLoad);
+      } else {
+        lLoadOps.push_back(lLoad);
+      }
     } else if (auto lStore = dyn_cast<ttg::LocalStoreOp>(op))
       lStoreOps.push_back(lStore);
     else if (auto pingpongDot = dyn_cast<tt::DotOp>(op))
       if (pingpongDot.getType().getRank() == 2)
         dotOps.push_back(pingpongDot);
   });
+
+  // TODO: Remove when we have example num_stages = 1 codepaths working.
+  if (num_stages != 2) {
+    std::stringstream message;
+    message << "All ping pong scheduling requires 2 stages. Found "
+            << num_stages << " stages";
+    LDBG(message.str());
+    return;
+  }
 
   // Currently, pingpong scheduling is known as helpful under limited condition.
   // Individual conditions are checked while collecting each operation such as
