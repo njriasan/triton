@@ -867,6 +867,7 @@ void Pingponger::getDotPingponged() {
       LDBG(message.str());
       return;
     }
+    // Case 1: Slice the first dot into 2 clusters.
   }
 }
 
