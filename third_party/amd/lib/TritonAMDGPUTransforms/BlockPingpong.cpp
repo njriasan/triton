@@ -83,7 +83,7 @@ class Pingponger {
   int64_t conditionalTileSizeHeuristic;
 
 public:
-  Pingponger(scf::ForOp forOp, int32_t numWarps, int32_t num_stages,
+  Pingponger(scf::ForOp forOp, int32_t numWarps, int32_t numStages,
              int64_t _conditionalTileSizeHeuristic)
       : forOp(forOp), numWarps(numWarps), numStages(numStages),
         conditionalTileSizeHeuristic(_conditionalTileSizeHeuristic) {}
@@ -862,9 +862,6 @@ public:
       });
     }
   }
-
-private:
-  int64_t conditionalTileSizeHeuristic = 33554432;
 };
 } // namespace
 
