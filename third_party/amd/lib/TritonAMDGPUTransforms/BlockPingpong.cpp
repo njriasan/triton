@@ -84,9 +84,9 @@ class Pingponger {
 
 public:
   Pingponger(scf::ForOp forOp, int32_t numWarps, int32_t numStages,
-             int64_t _conditionalTileSizeHeuristic)
+             int64_t conditionalTileSizeHeuristic)
       : forOp(forOp), numWarps(numWarps), numStages(numStages),
-        conditionalTileSizeHeuristic(_conditionalTileSizeHeuristic) {}
+        conditionalTileSizeHeuristic(conditionalTileSizeHeuristic) {}
   void getDotPingponged();
 
 private:
@@ -876,9 +876,9 @@ class TritonAMDGPUBlockPingpongPass
 public:
   TritonAMDGPUBlockPingpongPass() = default;
   TritonAMDGPUBlockPingpongPass(int32_t numStages,
-                                int64_t _conditionalTileSizeHeuristic) {
+                                int64_t conditionalTileSizeHeuristic) {
     this->numStages = numStages;
-    this->conditionalTileSizeHeuristic = _conditionalTileSizeHeuristic;
+    this->conditionalTileSizeHeuristic = conditionalTileSizeHeuristic;
   }
   void runOnOperation() override {
     ModuleOp m = getOperation();
