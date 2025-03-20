@@ -316,7 +316,7 @@ size_t Pingponger::estimateNonDotMemoryImpact(T *start, T *end,
 //    the local loads.
 // 3. Determine which global loads are used to populate the inputs to
 //    the local stores.
-// Note: This function currently depends on num_stages=2, which is a
+// Note: This function currently depends on numStages=2, which is a
 // precondition for the pingpong scheduling.
 void Pingponger::determineDotMemoryOps(
     tt::DotOp dotOp, DenseSet<tt::LoadOp> &dotGlobalLoads,
@@ -635,11 +635,10 @@ void Pingponger::addAsymmetricSyncToLoop(OpBuilder &builder, Location loc) {
 }
 
 void Pingponger::getDotPingponged() {
-  // TODO: Remove when we have example num_stages = 1 codepaths working.
-  if (numStages != 2) {
+  if (numStages < 1 || numStages > 2) {
     std::stringstream message;
-    message << "All ping pong scheduling requires 2 stages. Found " << numStages
-            << " stages";
+    message << "All ping pong scheduling requires 1 or 2 stages. Found "
+            << numStages << " stages";
     LDBG(message.str());
     return;
   }
@@ -676,170 +675,198 @@ void Pingponger::getDotPingponged() {
   // software pipelining and dot rank=2. Also only accept the for-loop with
   // supported combination of operations because this transformation is very
   // tightly scheduling the latencies.
-  if (gLoadOps.size() < 2 || lLoadOps.size() < 2 || dotOps.size() != 1) {
+  if (numStages == 2 &&
+      (gLoadOps.size() < 2 || lLoadOps.size() < 2 || dotOps.size() != 1)) {
     std::stringstream message;
-    message << "Unable to match ping pong scheduling pattern. Details: "
+    message << "Unable to match ping pong scheduling GEMM pattern. Details: "
             << gLoadOps.size() << " global loads, " << lLoadOps.size()
             << " local loads, " << dotOps.size() << " dot products";
     LDBG(message.str());
     return;
-  }
-
-  // Pingpong scheduling tries to form two different types of the instruction
-  // clusters, i.e., Dot clusters and Memory clusters. While each SIMD has
-  // two concurrent warps, both warps can execute a different type of
-  // instruction cluster in parallel. Here are currently available patterns,
-  // more patterns could be added later.
-  //
-  // (1) One Dot-Memory (ping-pong) cluster
-  //  :Ideal to support small tile size e.g., 128x128x64_FP16. Where amount
-  //   of the data used per each iteration is small enough and not causing
-  //   local_load waiting or register spilling. Currently used for numWarps=4
-  //   case where SIMD can hold two warps from different blocks.
-  //
-  // (2) Four Dot-Memory (ping-pongx4) clusters
-  //  :Useful for the larger tile size e.g., 256x256x64_FP16. Clustering
-  //   the Dot instruction (mfma) all together without fetching data requires
-  //   GPU to hold all the data for the calculation. Such large tile size
-  //   exceeds the amount of register GPU has so, we need to split the dot
-  //   into several pieces.
-  //
-  // (3) Two Dot-Memory (ping-pongx2) clusters
-  //  :Covers medium sized tile e.g., 256x128x64_FP16. Different tile size may
-  //  require different scheduling pattern because the loop consists of
-  //  different amount of memory transfer and dot operation. This scheduling
-  //  support the tile sizes not supported by above two methods.
-  //
-  // N.B., Tile size smaller than 128x128x64_FP16 is likely not compute-bound
-  // that pingpong scheduling doesn't help much.
-
-  auto dotType = dotOps[0].getType();
-  auto dotShape = dotType.getShape();
-  auto aType = dotOps[0].getA().getType();
-  auto aShape = aType.getShape();
-  auto elemWidth = aType.getElementTypeBitWidth();
-  int64_t tileSize = dotShape[0] * dotShape[1] * aShape[1] * elemWidth;
-
-  // The existing code depends on the loads being targeted being safe to move,
-  // which will not hold if we do not properly have a GEMM. As a result, we
-  // filter the associated load operations to only those that are associated
-  // // with the GEMM.
-  DenseSet<tt::LoadOp> dotGlobalLoads;
-  DenseSet<ttg::LocalLoadOp> dotLocalLoads;
-  DenseSet<ttg::LocalStoreOp> dotLocalStores;
-  determineDotMemoryOps(dotOps[0], dotGlobalLoads, dotLocalLoads,
-                        dotLocalStores);
-
-  // Prune Memory operations that may be moved to only those involved in dot
-  // computation. To understand the "cluster assumptions" we also estimate
-  // the impact of any additional loads/stores.
-  auto gLoadIt = std::stable_partition(
-      gLoadOps.begin(), gLoadOps.end(),
-      [&dotGlobalLoads](tt::LoadOp op) { return dotGlobalLoads.contains(op); });
-  auto effectiveGlobalLoadCount =
-      estimateNonDotMemoryImpact<tt::LoadOp>(gLoadIt, gLoadOps.end(), tileSize);
-  gLoadOps.erase(gLoadIt, gLoadOps.end());
-  effectiveGlobalLoadCount += gLoadOps.size();
-  auto lLoadIt = std::stable_partition(lLoadOps.begin(), lLoadOps.end(),
-                                       [&dotLocalLoads](ttg::LocalLoadOp op) {
-                                         return dotLocalLoads.contains(op);
-                                       });
-  auto effectiveLocalLoadCount = estimateNonDotMemoryImpact<ttg::LocalLoadOp>(
-      lLoadIt, lLoadOps.end(), tileSize);
-  lLoadOps.erase(lLoadIt, lLoadOps.end());
-  effectiveLocalLoadCount += lLoadOps.size();
-  auto lStoreIt =
-      std::stable_partition(lStoreOps.begin(), lStoreOps.end(),
-                            [&dotLocalStores](ttg::LocalStoreOp op) {
-                              return dotLocalStores.contains(op);
-                            });
-  auto effectiveLocalStoreCount = estimateNonDotMemoryImpact<ttg::LocalStoreOp>(
-      lStoreIt, lStoreOps.end(), tileSize);
-  lStoreOps.erase(lStoreIt, lStoreOps.end());
-  effectiveLocalStoreCount += lStoreOps.size();
-  // All PingPong Scheduler assumes there are 2 movable global loads and 2
-  // movable local loads.
-  if (gLoadOps.size() != 2 || lLoadOps.size() != 2) {
+  } else if (numStages == 1 && (gLoadOps.size() < 2 || lLoadOps.size() < 2 ||
+                                dotOps.size() != 2)) {
     std::stringstream message;
-    message << "Unable to match ping pong slicing pattern. Details: "
-            << gLoadOps.size() << " global loads in dot computation, "
-            << lLoadOps.size() << " local loads in dot computation";
+    message
+        << "Unable to match ping pong scheduling attention pattern. Details: "
+        << gLoadOps.size() << " global loads, " << lLoadOps.size()
+        << " local loads, " << dotOps.size() << " dot products";
     LDBG(message.str());
     return;
   }
 
-  // Restrict based on "effective loads" because this influenced the
-  // calculations used to generate the clusters.
-  if (effectiveGlobalLoadCount != 2 || effectiveLocalLoadCount != 2 ||
-      effectiveLocalStoreCount != 2) {
-    std::stringstream message;
-    message << "Unable to match memory expectations. Details: "
-            << effectiveGlobalLoadCount << " effective global load count, "
-            << effectiveLocalLoadCount << " effective local load count, "
-            << effectiveLocalStoreCount << " effective local store count";
-    LDBG(message.str());
-    return;
-  }
+  if (numStages == 2) {
+    // GEMM section
 
-  const int64_t minTile = 262144;      // e.g. 32x128x64x16bit
-  const int64_t smallTile = 16777216;  // e.g. 128x128x64x16bit
-  const int64_t mediumTile = 33554432; // smallTile x 2
-  const int64_t largeTile = 67108864;  // e.g. 256x256x64x16bit
+    // Pingpong scheduling tries to form two different types of the instruction
+    // clusters, i.e., Dot clusters and Memory clusters. While each SIMD has
+    // two concurrent warps, both warps can execute a different type of
+    // instruction cluster in parallel. Here are currently available patterns,
+    // more patterns could be added later.
+    //
+    // (1) One Dot-Memory (ping-pong) cluster
+    //  :Ideal to support small tile size e.g., 128x128x64_FP16. Where amount
+    //   of the data used per each iteration is small enough and not causing
+    //   local_load waiting or register spilling. Currently used for numWarps=4
+    //   case where SIMD can hold two warps from different blocks.
+    //
+    // (2) Four Dot-Memory (ping-pongx4) clusters
+    //  :Useful for the larger tile size e.g., 256x256x64_FP16. Clustering
+    //   the Dot instruction (mfma) all together without fetching data requires
+    //   GPU to hold all the data for the calculation. Such large tile size
+    //   exceeds the amount of register GPU has so, we need to split the dot
+    //   into several pieces.
+    //
+    // (3) Two Dot-Memory (ping-pongx2) clusters
+    //  :Covers medium sized tile e.g., 256x128x64_FP16. Different tile size may
+    //  require different scheduling pattern because the loop consists of
+    //  different amount of memory transfer and dot operation. This scheduling
+    //  support the tile sizes not supported by above two methods.
+    //
+    // N.B., Tile size smaller than 128x128x64_FP16 is likely not compute-bound
+    // that pingpong scheduling doesn't help much.
 
-  auto encoding = cast<RankedTensorType>(aType).getEncoding();
-  auto srcEncoding = cast<ttg::DotOperandEncodingAttr>(encoding);
-  kWidth = srcEncoding.getKWidth();
-  auto mfmaEncoding = cast<ttg::AMDMfmaEncodingAttr>(srcEncoding.getParent());
-  SmallVector<int64_t> intShape;
-  intShape.push_back(mfmaEncoding.getMDim());
-  intShape.push_back(mfmaEncoding.getNDim());
+    auto dotType = dotOps[0].getType();
+    auto dotShape = dotType.getShape();
+    auto aType = dotOps[0].getA().getType();
+    auto aShape = aType.getShape();
+    auto elemWidth = aType.getElementTypeBitWidth();
+    int64_t tileSize = dotShape[0] * dotShape[1] * aShape[1] * elemWidth;
 
-  if (numWarps == 4) { // Pingpong between warps from different blocks
-    // Transform a loop with small tile size.
-    // We've observed that this small tile size spent almost equivalent cycle
-    // times for issuing the memory operations and issuing dot operations,
-    // smaller tile sizes are not likely to get any advantage from current dot
-    // centric pingpong scheduling.
-    if (tileSize <= smallTile && tileSize >= minTile)
-      transformOnePPClusters(builder, loc);
-    // numWarps=4 doesn't need asymmetric sync, return.
-    return;
-  } else if (numWarps == 8) { // Pingpong between warps from the same block
-    if (lStoreOps.size() != 2) {
+    // The existing code depends on the loads being targeted being safe to move,
+    // which will not hold if we do not properly have a GEMM. As a result, we
+    // filter the associated load operations to only those that are associated
+    // // with the GEMM.
+    DenseSet<tt::LoadOp> dotGlobalLoads;
+    DenseSet<ttg::LocalLoadOp> dotLocalLoads;
+    DenseSet<ttg::LocalStoreOp> dotLocalStores;
+    determineDotMemoryOps(dotOps[0], dotGlobalLoads, dotLocalLoads,
+                          dotLocalStores);
+
+    // Prune Memory operations that may be moved to only those involved in dot
+    // computation. To understand the "cluster assumptions" we also estimate
+    // the impact of any additional loads/stores.
+    auto gLoadIt = std::stable_partition(gLoadOps.begin(), gLoadOps.end(),
+                                         [&dotGlobalLoads](tt::LoadOp op) {
+                                           return dotGlobalLoads.contains(op);
+                                         });
+    auto effectiveGlobalLoadCount = estimateNonDotMemoryImpact<tt::LoadOp>(
+        gLoadIt, gLoadOps.end(), tileSize);
+    gLoadOps.erase(gLoadIt, gLoadOps.end());
+    effectiveGlobalLoadCount += gLoadOps.size();
+    auto lLoadIt = std::stable_partition(lLoadOps.begin(), lLoadOps.end(),
+                                         [&dotLocalLoads](ttg::LocalLoadOp op) {
+                                           return dotLocalLoads.contains(op);
+                                         });
+    auto effectiveLocalLoadCount = estimateNonDotMemoryImpact<ttg::LocalLoadOp>(
+        lLoadIt, lLoadOps.end(), tileSize);
+    lLoadOps.erase(lLoadIt, lLoadOps.end());
+    effectiveLocalLoadCount += lLoadOps.size();
+    auto lStoreIt =
+        std::stable_partition(lStoreOps.begin(), lStoreOps.end(),
+                              [&dotLocalStores](ttg::LocalStoreOp op) {
+                                return dotLocalStores.contains(op);
+                              });
+    auto effectiveLocalStoreCount =
+        estimateNonDotMemoryImpact<ttg::LocalStoreOp>(lStoreIt, lStoreOps.end(),
+                                                      tileSize);
+    lStoreOps.erase(lStoreIt, lStoreOps.end());
+    effectiveLocalStoreCount += lStoreOps.size();
+    // All PingPong Scheduler assumes there are 2 movable global loads and 2
+    // movable local loads.
+    if (gLoadOps.size() != 2 || lLoadOps.size() != 2) {
       std::stringstream message;
       message << "Unable to match ping pong slicing pattern. Details: "
-              << lStoreOps.size() << " local stores in dot computation ";
+              << gLoadOps.size() << " global loads in dot computation, "
+              << lLoadOps.size() << " local loads in dot computation";
       LDBG(message.str());
       return;
     }
-    // Transform a loop where the tile size requires dots to be sliced
-    if (tileSize == mediumTile) {
-      if (transformTwoPPClusters(builder, dotOps[0]->getLoc()).failed()) {
-        LDBG("Encountered failure when trying to execute the two ping pong "
-             "cluster transformation");
-        return;
-      }
-    } else if (tileSize >= largeTile) {
-      // Avoid known register spilling. i.e., mfma16x16x16 & largetile & kpack>1
-      if (intShape[0] == 16 && intShape[1] == 16 && kWidth == 8) {
-        LDBG("Reached known register spilling case, skip pingpong scheduling");
-        return;
-      }
-      if (transformFourPPClusters(builder, dotOps[0]->getLoc()).failed()) {
-        LDBG("Encountered failure when trying to execute the four ping pong "
-             "cluster transformation");
-        return;
-      }
-    } else
-      return;
 
-    // Let half of the warps start the loop first and the others follow later
-    // but in the synchronized way. This can be accomplished by calling
-    // cond_barrier for the second half before the beginning of the loop so they
-    // can wait until the first half hit the first barrier in the loop. Also
-    // need to call cond_barrier for the first_half after exiting the loop, so
-    // all warps can converge again.
-    addAsymmetricSyncToLoop(builder, loc);
+    // Restrict based on "effective loads" because this influenced the
+    // calculations used to generate the clusters.
+    if (effectiveGlobalLoadCount != 2 || effectiveLocalLoadCount != 2 ||
+        effectiveLocalStoreCount != 2) {
+      std::stringstream message;
+      message << "Unable to match memory expectations. Details: "
+              << effectiveGlobalLoadCount << " effective global load count, "
+              << effectiveLocalLoadCount << " effective local load count, "
+              << effectiveLocalStoreCount << " effective local store count";
+      LDBG(message.str());
+      return;
+    }
+
+    const int64_t minTile = 262144;      // e.g. 32x128x64x16bit
+    const int64_t smallTile = 16777216;  // e.g. 128x128x64x16bit
+    const int64_t mediumTile = 33554432; // smallTile x 2
+    const int64_t largeTile = 67108864;  // e.g. 256x256x64x16bit
+
+    auto encoding = cast<RankedTensorType>(aType).getEncoding();
+    auto srcEncoding = cast<ttg::DotOperandEncodingAttr>(encoding);
+    kWidth = srcEncoding.getKWidth();
+    auto mfmaEncoding = cast<ttg::AMDMfmaEncodingAttr>(srcEncoding.getParent());
+    SmallVector<int64_t> intShape;
+    intShape.push_back(mfmaEncoding.getMDim());
+    intShape.push_back(mfmaEncoding.getNDim());
+
+    if (numWarps == 4) { // Pingpong between warps from different blocks
+      // Transform a loop with small tile size.
+      // We've observed that this small tile size spent almost equivalent cycle
+      // times for issuing the memory operations and issuing dot operations,
+      // smaller tile sizes are not likely to get any advantage from current dot
+      // centric pingpong scheduling.
+      if (tileSize <= smallTile && tileSize >= minTile)
+        transformOnePPClusters(builder, loc);
+      // numWarps=4 doesn't need asymmetric sync, return.
+      return;
+    } else if (numWarps == 8) { // Pingpong between warps from the same block
+      if (lStoreOps.size() != 2) {
+        std::stringstream message;
+        message << "Unable to match ping pong slicing pattern. Details: "
+                << lStoreOps.size() << " local stores in dot computation ";
+        LDBG(message.str());
+        return;
+      }
+      // Transform a loop where the tile size requires dots to be sliced
+      if (tileSize == mediumTile) {
+        if (transformTwoPPClusters(builder, dotOps[0]->getLoc()).failed()) {
+          LDBG("Encountered failure when trying to execute the two ping pong "
+               "cluster transformation");
+          return;
+        }
+      } else if (tileSize >= largeTile) {
+        // Avoid known register spilling. i.e., mfma16x16x16 & largetile &
+        // kpack>1
+        if (intShape[0] == 16 && intShape[1] == 16 && kWidth == 8) {
+          LDBG(
+              "Reached known register spilling case, skip pingpong scheduling");
+          return;
+        }
+        if (transformFourPPClusters(builder, dotOps[0]->getLoc()).failed()) {
+          LDBG("Encountered failure when trying to execute the four ping pong "
+               "cluster transformation");
+          return;
+        }
+      } else
+        return;
+
+      // Let half of the warps start the loop first and the others follow later
+      // but in the synchronized way. This can be accomplished by calling
+      // cond_barrier for the second half before the beginning of the loop so
+      // they can wait until the first half hit the first barrier in the loop.
+      // Also need to call cond_barrier for the first_half after exiting the
+      // loop, so all warps can converge again.
+      addAsymmetricSyncToLoop(builder, loc);
+    }
+  } else {
+    // ATTENTION section
+    if (numWarps != 4) {
+      std::stringstream message;
+      message << "Unable to match ping pong scheduling attention pattern. "
+                 "Expected 4 warps, found "
+              << numWarps;
+      LDBG(message.str());
+      return;
+    }
   }
 }
 
