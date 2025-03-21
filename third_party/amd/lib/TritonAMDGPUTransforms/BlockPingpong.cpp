@@ -867,19 +867,20 @@ void Pingponger::getDotPingponged() {
       LDBG(message.str());
       return;
     }
-    int64_t testCase = 0;
-    if (testCase % 2 == 0) {
+    int64_t testCase1 = 0;
+    if (testCase1 == 0) {
       // Case 1: Slice the first dot into 2 clusters.
       if (sliceDot(builder, loc, dotOps[0], 2).failed()) {
         return failure();
       }
       // General cluster looks like:
       // 1. Global load
-      // 2. Local write
-      // 3. Local load slice 0
-      // 4. dot
+      // 2. Local write slice 0
+      // 3. Local write slice 1
+      // 4. Local load slice 0
+      // 4. dot slice 0
       // 5. Local load slice 1
-      // 6. dot
+      // 6. dot slice 1
       updateOpInsertion(gLoadOps[0]);
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
@@ -894,9 +895,29 @@ void Pingponger::getDotPingponged() {
       // TODO: Figure out the pseudo code for this case.
     }
     // Pull the Load operation before the elementwise operations
-
-    // Case 1: Just hide the load behind the elementwise ops
-    // Case 2: Slice the elementwise ops + dot.
+    moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
+    appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+    int64_t testCase2 = 0;
+    if (testCase2 == 0) {
+      // Case 1: Divide elementwise ops into 4 clusters.
+      // Create a pattern of:
+      // 1. Global Load
+      // 2. Elementwise op slice 0/4
+      // 3. Local store slice 0/2
+      // 4. Elementwise op slice 1/4
+      // 5. Local read slice 0/2
+      // 6. Dot slice 0/2
+      // 7. Elementwise op slice 2/4
+      // 8. Local store slice 1/2
+      // 9. Elementwise op slice 3/4
+      // 10. Local read slice 1/2
+      // 11. Dot slice 1/2
+      if (sliceDotAElementwise(builder, loc, dotOps[0], 4).failed()) {
+        return failure();
+      }
+    } else {
+      // Case 2: Slice the elementwise ops + dot.
+    }
   }
 }
 z class TritonAMDGPUBlockPingpongPass
