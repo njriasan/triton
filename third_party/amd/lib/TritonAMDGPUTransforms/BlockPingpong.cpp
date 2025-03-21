@@ -869,18 +869,18 @@ void Pingponger::getDotPingponged() {
     }
     int64_t testCase1 = 0;
     if (testCase1 == 0) {
-      // Case 1: Slice the first dot into 2 clusters.
+      // Case 1: Slice all dots into clusters of size 2.
       if (sliceDot(builder, loc, dotOps[0], 2).failed()) {
         return failure();
       }
-      // General cluster looks like:
+      // General cluster 0 looks like:
       // 1. Global load
       // 2. Local write slice 0
       // 3. Local write slice 1
       // 4. Local load slice 0
-      // 4. dot slice 0
-      // 5. Local load slice 1
-      // 6. dot slice 1
+      // 5. dot slice 0
+      // 6. Local load slice 1
+      // 7. dot slice 1
       updateOpInsertion(gLoadOps[0]);
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
@@ -889,34 +889,43 @@ void Pingponger::getDotPingponged() {
       appendOpWithPrio(builder, dotSliceOps[0], loc);
       appendSlicedLoadB(/*slice=*/1);
       appendOpWithPrio(builder, dotSliceOps[1], loc);
-    } else {
-      // Case 2: Just focus on treating the first dot + memory as a whole
-      // cluster.
-      // TODO: Figure out the pseudo code for this case.
-    }
-    // Pull the Load operation before the elementwise operations
-    moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
-    appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
-    int64_t testCase2 = 0;
-    if (testCase2 == 0) {
-      // Case 1: Divide elementwise ops into 4 clusters.
+      // Move the second global load up in the loop.
+      moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // Divide elementwise ops into 4 clusters.
       // Create a pattern of:
       // 1. Global Load
       // 2. Elementwise op slice 0/4
       // 3. Local store slice 0/2
       // 4. Elementwise op slice 1/4
       // 5. Local read slice 0/2
-      // 6. Dot slice 0/2
-      // 7. Elementwise op slice 2/4
-      // 8. Local store slice 1/2
-      // 9. Elementwise op slice 3/4
-      // 10. Local read slice 1/2
-      // 11. Dot slice 1/2
+      // 6. Concat elementwise op slice 0 and 1
+      // 7. Dot slice 0/2
+      // 8. Elementwise op slice 2/4
+      // 9. Local store slice 1/2
+      // 10. Elementwise op slice 3/4
+      // 11. Local read slice 1/2
+      // 12. Concat elementwise op slice 2 and 3
+      // 13. Dot slice 1/2
       if (sliceDotAElementwise(builder, loc, dotOps[0], 4).failed()) {
         return failure();
       }
     } else {
-      // Case 2: Slice the elementwise ops + dot.
+      // Case 2: Treat the whole dots as larger clusters that we overlap with
+      // the elementwise ops. General pattern setprio 0
+      // 1. Global load
+      // 2. Local write
+      // 3. Local load
+      // setprio 1
+      // 4. dot
+      // setprio 0
+      // 5. Global load
+      // 6. Elementwise op slice 0
+      // 7. Local store
+      // 8. Elementwise op slice 1
+      // 9. Local read
+      // 10. Concat elementwise op slice 0 and 1
+      // 11. Dot
     }
   }
 }
