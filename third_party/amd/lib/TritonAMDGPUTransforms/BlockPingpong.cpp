@@ -870,9 +870,28 @@ void Pingponger::getDotPingponged() {
     int64_t testCase = 0;
     if (testCase % 2 == 0) {
       // Case 1: Slice the first dot into 2 clusters.
-    } else if (testCase % 2 == 1) {
+      if (sliceDot(builder, loc, dotOps[0], 2).failed()) {
+        return failure();
+      }
+      // General cluster looks like:
+      // 1. Global load
+      // 2. Local write
+      // 3. Local load slice 0
+      // 4. dot
+      // 5. Local load slice 1
+      // 6. dot
+      updateOpInsertion(gLoadOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      appendSlicedLoadB(/*slice=*/0);
+      appendOpWithPrio(builder, dotSliceOps[0], loc);
+      appendSlicedLoadB(/*slice=*/1);
+      appendOpWithPrio(builder, dotSliceOps[1], loc);
+    } else {
       // Case 2: Just focus on treating the first dot + memory as a whole
       // cluster.
+      // TODO: Figure out the pseudo code for this case.
     }
     // Pull the Load operation before the elementwise operations
 
