@@ -867,11 +867,20 @@ void Pingponger::getDotPingponged() {
       LDBG(message.str());
       return;
     }
-    // Case 1: Slice the first dot into 2 clusters.
+    int64_t testCase = 0;
+    if (testCase % 2 == 0) {
+      // Case 1: Slice the first dot into 2 clusters.
+    } else if (testCase % 2 == 1) {
+      // Case 2: Just focus on treating the first dot + memory as a whole
+      // cluster.
+    }
+    // Pull the Load operation before the elementwise operations
+
+    // Case 1: Just hide the load behind the elementwise ops
+    // Case 2: Slice the elementwise ops + dot.
   }
 }
-
-class TritonAMDGPUBlockPingpongPass
+z class TritonAMDGPUBlockPingpongPass
     : public TritonAMDGPUBlockPingpongBase<TritonAMDGPUBlockPingpongPass> {
 public:
   TritonAMDGPUBlockPingpongPass() = default;
