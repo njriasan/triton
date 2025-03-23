@@ -903,8 +903,8 @@ void Pingponger::getDotPingponged() {
       moveOpAndPredecessorsUpSameBlock(gLoadOps[0]);
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 3. Local write
-      moveOpAndPredecessorsUpSameBlock(lStoreOps[0])
-          appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 4. Local load
       moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
       // 5. setprio 0
@@ -916,6 +916,7 @@ void Pingponger::getDotPingponged() {
       // 7. dot with prio
       appendOpWithPrio(builder, dotOps[0], loc);
       // 8. Global load
+      moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
       // 6. Elementwise op slice 0
       // 7. Local store
       // 8. Elementwise op slice 1
@@ -927,7 +928,7 @@ void Pingponger::getDotPingponged() {
     return;
   }
 }
-z class TritonAMDGPUBlockPingpongPass
+class TritonAMDGPUBlockPingpongPass
     : public TritonAMDGPUBlockPingpongBase<TritonAMDGPUBlockPingpongPass> {
 public:
   TritonAMDGPUBlockPingpongPass() = default;
