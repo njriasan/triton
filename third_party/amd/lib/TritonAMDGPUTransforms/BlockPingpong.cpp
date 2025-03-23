@@ -896,13 +896,26 @@ void Pingponger::getDotPingponged() {
     } else {
       // Case 2: Treat the whole dots as larger clusters that we overlap with
       // the elementwise ops. General pattern setprio 0
-      // 1. Global load
-      // 2. Local write
-      // 3. Local load
-      // setprio 1
-      // 4. dot
-      // setprio 0
-      // 5. Global load
+      updateOpInsertion(gLoadOps[0]);
+      // 1. setprio 1
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
+      // 2. Global load
+      moveOpAndPredecessorsUpSameBlock(gLoadOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // 3. Local write
+      moveOpAndPredecessorsUpSameBlock(lStoreOps[0])
+          appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // 4. Local load
+      moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
+      // 5. setprio 0
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
+      // TODO: Double check this
+      // 6. sched barrier to prevent memory ops from cross but leave other ops
+      // to be scheduled across the barrier.
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 1));
+      // 7. dot with prio
+      appendOpWithPrio(builder, dotOps[0], loc);
+      // 8. Global load
       // 6. Elementwise op slice 0
       // 7. Local store
       // 8. Elementwise op slice 1
