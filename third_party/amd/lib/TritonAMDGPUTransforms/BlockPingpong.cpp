@@ -868,11 +868,8 @@ void Pingponger::getDotPingponged() {
       return;
     }
     int64_t testCase1 = 0;
-    if (testCase1 == 0) {
+    if (testCase1 == 1) {
       // Case 1: Slice all dots into clusters of size 2.
-      if (sliceDot(builder, loc, dotOps[0], 2).failed()) {
-        return failure();
-      }
       // General cluster 0 looks like:
       // 1. Global load
       // 2. Local write slice 0
@@ -881,17 +878,6 @@ void Pingponger::getDotPingponged() {
       // 5. dot slice 0
       // 6. Local load slice 1
       // 7. dot slice 1
-      updateOpInsertion(gLoadOps[0]);
-      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
-      moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
-      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
-      appendSlicedLoadB(/*slice=*/0);
-      appendOpWithPrio(builder, dotSliceOps[0], loc);
-      appendSlicedLoadB(/*slice=*/1);
-      appendOpWithPrio(builder, dotSliceOps[1], loc);
-      // Move the second global load up in the loop.
-      moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
-      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // Divide elementwise ops into 4 clusters.
       // Create a pattern of:
       // 1. Global Load
@@ -907,9 +893,6 @@ void Pingponger::getDotPingponged() {
       // 11. Local read slice 1/2
       // 12. Concat elementwise op slice 2 and 3
       // 13. Dot slice 1/2
-      if (sliceDotAElementwise(builder, loc, dotOps[0], 4).failed()) {
-        return failure();
-      }
     } else {
       // Case 2: Treat the whole dots as larger clusters that we overlap with
       // the elementwise ops. General pattern setprio 0
@@ -927,6 +910,8 @@ void Pingponger::getDotPingponged() {
       // 10. Concat elementwise op slice 0 and 1
       // 11. Dot
     }
+    // numWarps=4 doesn't need asymmetric sync, return.
+    return;
   }
 }
 z class TritonAMDGPUBlockPingpongPass
