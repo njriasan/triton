@@ -62,6 +62,7 @@ class Pingponger {
   SmallVector<ttg::LocalLoadOp> lLoadOps;
   SmallVector<ttg::LocalStoreOp> lStoreOps;
   SmallVector<tt::DotOp> dotOps;
+  SmallVector<Operation *> elementwiseOps;
   SmallVector<SmallVector<Operation *>> subViewOps;
   SmallVector<SmallVector<Operation *>> loadSliceOps;
   SmallVector<Operation *> dotSliceOps;
@@ -118,6 +119,8 @@ private:
                              DenseSet<ttg::LocalStoreOp> &dotLocalStores);
   template <typename T>
   void findClosestPredOps(Value v, DenseSet<T> &matchingOps);
+
+  LogicalResult collectElementwiseOps(Operation *startOp, Operation *endOp);
 };
 
 void Pingponger::updateOpInsertion(Operation *op) { lastInsertedOp = op; }
@@ -230,6 +233,26 @@ void Pingponger::findClosestPredOps(Value v, DenseSet<T> &matchingOps) {
     }
   };
   impl(v);
+}
+
+// Collect all of the elementwise operations that are in the use def chain
+// going from startOp to endOp.
+// TODO: Actually verify results are elementwise.
+// TODO: Fix to actually ensure a structured IR.
+LogicalResult Pingponger::collectElementwiseOps(Operation *startOp,
+                                                Operation *endOp) {
+  if (startOp == endOp) {
+    return success();
+  }
+  for (auto user : startOp->getUsers()) {
+    if (user != endOp) {
+      elementwiseOps.push_back(user);
+      if (collectElementwiseOps(user, endOp).failed()) {
+        return failure();
+      }
+    }
+  }
+  return success();
 }
 
 // Determine how memory operations are counted for conditionals
@@ -867,6 +890,15 @@ void Pingponger::getDotPingponged() {
       LDBG(message.str());
       return;
     }
+    if (collectElementwiseOps(dotOps[0], dotOps[1]).failed()) {
+      std::stringstream message;
+      message << "Unable to match ping pong HSTU attention pattern. "
+                 "Elementwise ops not found";
+      return;
+    }
+    for (auto elemenetwiseOp : elementwiseOps) {
+      elemenetwiseOp->dump();
+    }
     int64_t testCase1 = 0;
     if (testCase1 == 1) {
       // Case 1: Slice all dots into clusters of size 2.
@@ -917,12 +949,12 @@ void Pingponger::getDotPingponged() {
       appendOpWithPrio(builder, dotOps[0], loc);
       // 8. Global load
       moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
-      // 6. Elementwise op slice 0
-      // 7. Local store
-      // 8. Elementwise op slice 1
-      // 9. Local read
-      // 10. Concat elementwise op slice 0 and 1
-      // 11. Dot
+      // 9. Elementwise op slice 0
+      // 10. Local store
+      // 11. Elementwise op slice 1
+      // 12. Local read
+      // 13. Concat elementwise op slice 0 and 1
+      // 14. Dot
     }
     // numWarps=4 doesn't need asymmetric sync, return.
     return;
