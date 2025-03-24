@@ -985,9 +985,7 @@ void Pingponger::getDotPingponged() {
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 3. Local load
-      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
       moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
-      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 4. setprio 0
       // TODO: Double check this
