@@ -9,6 +9,7 @@
 #include "third_party/amd/include/Dialect/TritonAMDGPU/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "triton/Dialect/TritonGPU/Transforms/Utility.h"
+#include <iostream>
 
 #define GEN_PASS_CLASSES
 #include "TritonAMDGPUTransforms/Passes.h"
@@ -66,6 +67,7 @@ class Pingponger {
   SmallVector<SmallVector<Operation *>> subViewOps;
   SmallVector<SmallVector<Operation *>> loadSliceOps;
   SmallVector<Operation *> dotSliceOps;
+  SmallVector<SmallVector<Operation *>> elementwiseSliceOps;
   SmallVector<Value> constOffsets;
   Operation *lastInsertedOp;
 
@@ -121,6 +123,8 @@ private:
   void findClosestPredOps(Value v, DenseSet<T> &matchingOps);
 
   LogicalResult collectElementwiseOps(Operation *startOp, Operation *endOp);
+  LogicalResult sliceElementwiseOps(OpBuilder &builder, Location loc,
+                                    unsigned numSlices);
 };
 
 void Pingponger::updateOpInsertion(Operation *op) { lastInsertedOp = op; }
@@ -252,6 +256,20 @@ LogicalResult Pingponger::collectElementwiseOps(Operation *startOp,
       }
     }
   }
+  return success();
+}
+
+// Slice the elementwise operations into numSlices slices along the K dimension.
+// The results are concatenated back together into a single result as the final
+// batch.
+LogicalResult Pingponger::sliceElementwiseOps(OpBuilder &builder, Location loc,
+                                              unsigned numSlices) {
+  // All operations should be elementwise, so we can
+  auto typeA = dotOps[1].getA().getType();
+  auto shapeA = typeA.getShape();
+  int64_t sliceWidth = shapeA[0] / numSlices;
+  if (shapeA[0] % numSlices != 0)
+    return failure();
   return success();
 }
 
@@ -706,8 +724,8 @@ void Pingponger::getDotPingponged() {
             << " local loads, " << dotOps.size() << " dot products";
     LDBG(message.str());
     return;
-  } else if (numStages == 1 && (gLoadOps.size() < 2 || lLoadOps.size() < 2 ||
-                                dotOps.size() != 2)) {
+  } else if (numStages == 1 && (gLoadOps.size() != 2 || lLoadOps.size() != 2 ||
+                                lStoreOps.size() != 0 || dotOps.size() != 2)) {
     std::stringstream message;
     message
         << "Unable to match ping pong scheduling attention pattern. Details: "
@@ -890,7 +908,8 @@ void Pingponger::getDotPingponged() {
       LDBG(message.str());
       return;
     }
-    if (collectElementwiseOps(dotOps[0], dotOps[1]).failed()) {
+    if (collectElementwiseOps(dotOps[0], dotOps[1].getA().getDefiningOp())
+            .failed()) {
       std::stringstream message;
       message << "Unable to match ping pong HSTU attention pattern. "
                  "Elementwise ops not found";
@@ -899,8 +918,8 @@ void Pingponger::getDotPingponged() {
     for (auto elemenetwiseOp : elementwiseOps) {
       elemenetwiseOp->dump();
     }
-    int64_t testCase1 = 0;
-    if (testCase1 == 1) {
+    int64_t testCase = 2;
+    if (testCase == 0) {
       // Case 1: Slice all dots into clusters of size 2.
       // General cluster 0 looks like:
       // 1. Global load
@@ -925,7 +944,11 @@ void Pingponger::getDotPingponged() {
       // 11. Local read slice 1/2
       // 12. Concat elementwise op slice 2 and 3
       // 13. Dot slice 1/2
-    } else {
+    } else if (testCase == 1) {
+      if (sliceElementwiseOps(builder, loc, 2).failed()) {
+        LDBG("Failed to slice elementwise ops");
+        return;
+      }
       // Case 2: Treat the whole dots as larger clusters that we overlap with
       // the elementwise ops. General pattern setprio 0
       updateOpInsertion(gLoadOps[0]);
@@ -934,27 +957,59 @@ void Pingponger::getDotPingponged() {
       // 2. Global load
       moveOpAndPredecessorsUpSameBlock(gLoadOps[0]);
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
-      // 3. Local write
-      moveOpAndPredecessorsUpSameBlock(lStoreOps[0]);
-      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
-      // 4. Local load
+      // 3. Local load
       moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
-      // 5. setprio 0
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // 4. setprio 0
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       // TODO: Double check this
-      // 6. sched barrier to prevent memory ops from cross but leave other ops
+      // 5. sched barrier to prevent memory ops from cross but leave other ops
       // to be scheduled across the barrier.
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 1));
-      // 7. dot with prio
+      // 6. dot with prio
       appendOpWithPrio(builder, dotOps[0], loc);
-      // 8. Global load
+      // 7. Global load
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
       moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
-      // 9. Elementwise op slice 0
-      // 10. Local store
-      // 11. Elementwise op slice 1
-      // 12. Local read
-      // 13. Concat elementwise op slice 0 and 1
-      // 14. Dot
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
+      // 8. Elementwise op slice 0
+      // 9. Local read
+      // 10. Elementwise op slice 1
+      // 11. Concat elementwise op slice 0 and 1
+      // 12. Dot
+    } else {
+      // Case 3: Just reorder memory ops + add setprio.
+      // No actual slicing.
+      updateOpInsertion(gLoadOps[0]);
+      // 1. setprio 1
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
+      // 2. Global load
+      moveOpAndPredecessorsUpSameBlock(gLoadOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // 3. Local load
+      moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
+      // 4. setprio 0
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
+      // TODO: Double check this
+      // 5. sched barrier to prevent memory ops from cross but leave other ops
+      // to be scheduled across the barrier.
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 1));
+      // 6. dot with prio
+      appendOpWithPrio(builder, dotOps[0], loc);
+      // 7. Global load with prio
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
+      moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
+      // 8. Move to dot op.
+      updateOpInsertion(dotOps[1]);
+      // TODO: Double check this
+      // 9. sched barrier to prevent memory ops from cross but leave other ops
+      // to be scheduled across the barrier.
+      appendOp(builder.create<ROCDL::SchedBarrier>(loc, 1));
+      // 10. dot with prio
+      appendOpWithPrio(builder, dotOps[1], loc);
     }
     // numWarps=4 doesn't need asymmetric sync, return.
     return;
