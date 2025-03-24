@@ -915,9 +915,6 @@ void Pingponger::getDotPingponged() {
                  "Elementwise ops not found";
       return;
     }
-    for (auto elemenetwiseOp : elementwiseOps) {
-      elemenetwiseOp->dump();
-    }
     int64_t testCase = 2;
     if (testCase == 0) {
       // Case 1: Slice all dots into clusters of size 2.
@@ -991,15 +988,14 @@ void Pingponger::getDotPingponged() {
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 4. setprio 0
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
-      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       // TODO: Double check this
       // 5. sched barrier to prevent memory ops from cross but leave other ops
       // to be scheduled across the barrier.
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 1));
       // 6. dot with prio
-      appendOpWithPrio(builder, dotOps[0], loc);
-      // 7. Global load with prio
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
+      moveOpAndPredecessorsUpSameBlock(dotOps[0]);
+      // 7. Global load (keep prio)
       moveOpAndPredecessorsUpSameBlock(gLoadOps[1]);
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       // 8. Move to dot op.
