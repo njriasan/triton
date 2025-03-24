@@ -982,12 +982,14 @@ void Pingponger::getDotPingponged() {
       appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
       // 2. Global load
       moveOpAndPredecessorsUpSameBlock(gLoadOps[0]);
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 3. Local load
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, highPriority));
       moveOpAndPredecessorsUpSameBlock(lLoadOps[0]);
+      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       appendOp(builder.create<ROCDL::SchedBarrier>(loc, 0));
       // 4. setprio 0
-      appendOp(builder.create<ROCDL::SetPrioOp>(loc, lowPriority));
       // TODO: Double check this
       // 5. sched barrier to prevent memory ops from cross but leave other ops
       // to be scheduled across the barrier.
