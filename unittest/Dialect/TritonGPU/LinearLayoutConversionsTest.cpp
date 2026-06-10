@@ -135,8 +135,7 @@ public:
 
   TensorMemoryEncodingAttr tmem(unsigned blockM, unsigned blockN,
                                 CGAEncodingAttr cgaLayout) {
-    return TensorMemoryEncodingAttr::get(&ctx, blockM, blockN, 1, cgaLayout,
-                                         false);
+    return TensorMemoryEncodingAttr::get(&ctx, blockM, blockN, 1, cgaLayout);
   }
 
   TensorMemoryEncodingAttr tmem(unsigned blockM, unsigned blockN) {
@@ -3319,11 +3318,25 @@ TEST_F(LinearLayoutConversionsTest, TensorMemory_blockM_128) {
                 LinearLayout::identity1D(2, kCol, d1));
 }
 
-TEST_F(LinearLayoutConversionsTest, TensorMemory_CTASplit) {
+TEST_F(LinearLayoutConversionsTest, TensorMemory_fp4Padded) {
+  auto enc = TensorMemoryEncodingAttr::get(
+      &ctx, 128, 64, 1, CGAEncodingAttr::get1CTALayout(&ctx, 2),
+      /*twoCTAs=*/false, /*fp4Padded=*/true);
   auto d0 = S("dim0");
   auto d1 = S("dim1");
   auto kRow = S("row");
   auto kCol = S("col");
+  auto kBlock = S("block");
+  LinearLayout tile = LinearLayout::identity1D(128, kRow, d0) *
+                      LinearLayout::zeros1D(2, kCol, d1) *
+                      LinearLayout::identity1D(64, kCol, d1) *
+                      LinearLayout::identity1D(1, kBlock, d0);
+  EXPECT_EQ(toLinearLayout({128, 64}, enc), tile);
+}
+
+TEST_F(LinearLayoutConversionsTest, TensorMemory_CTASplit) {
+  auto d0 = S("dim0");
+  auto d1 = S("dim1");
   auto kBlock = S("block");
   LinearLayout ll = LinearLayout({{kBlock, {{0, 1}}}}, {d0, d1});
   auto cgaLayout = CGAEncodingAttr::get(&ctx, std::move(ll));
