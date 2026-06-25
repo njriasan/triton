@@ -610,13 +610,20 @@ struct LocalSharedMemoryAddress {
   Value ctaId;
 };
 
-// Compute per-element shared-memory addresses for a local atomic/ldst update by
-// replacing `coords[*][axis]` with `idxValues[*]` and mapping the resulting
-// logical coordinates back to shared-memory offsets and target CTAs.
-SmallVector<LocalSharedMemoryAddress> computeLocalAddrs(
+// Compute per-element shared-memory offsets and target CTAs for a local
+// gather/scatter. The index replaces the logical coordinate along `axis`; all
+// other coordinates come from `regLayout`. The target CTA is null for local
+// accesses.
+SmallVector<std::pair<Value, Value>> computeBlockLocalOffsets(
     Location loc, triton::gpu::MemDescType memDescTy,
-    SharedMemoryObject smemObj, Type llvmElemTy, ArrayRef<Value> idxValues,
-    ArrayRef<SmallVector<Value>> coords, unsigned axis, RewriterBase &rewriter);
+    const LinearLayout &regLayout, ArrayRef<Value> idxValues, unsigned axis,
+    RewriterBase &rewriter, const TargetInfoBase &targetInfo);
+
+SmallVector<LocalSharedMemoryAddress>
+materializeLocalAddrs(Location loc, triton::gpu::MemDescType memDescTy,
+                      SharedMemoryObject smemObj, Type llvmElemTy,
+                      ArrayRef<std::pair<Value, Value>> offsetAndBlock,
+                      RewriterBase &rewriter);
 
 // Backend-agnostic preparation for lowering LocalAtomicScatterRMWOp.
 struct LocalAtomicScatterRMWInfo {
