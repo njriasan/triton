@@ -52,8 +52,6 @@ function(add_proton_library name)
   target_include_directories(${name}
     PRIVATE
       "${CUPTI_INCLUDE_DIR}"
-      "${TRITON_CUDACRT_PATH}"
-      "${TRITON_CUDART_PATH}"
       "${JSON_INCLUDE_DIR}"
       "${PROTON_COMMON_DIR}/include"
       "${PROTON_SRC_DIR}/include"
