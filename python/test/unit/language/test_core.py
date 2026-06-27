@@ -4741,6 +4741,8 @@ def _softmax_vectorization_kernel(output_ptr, input_ptr, input_row_stride, outpu
 def test_softmax_vectorization_correctness(n_cols, device):
     if not is_cuda():
         pytest.skip("Requires CUDA")
+    if torch.cuda.get_device_capability()[0] < 10:
+        pytest.skip("Requires Blackwell")
 
     torch.manual_seed(0)
     n_rows = 32
@@ -4754,7 +4756,7 @@ def test_softmax_vectorization_correctness(n_cols, device):
 
     for provider, max_divisibility, num_stages in cases:
         y = torch.empty_like(x)
-        _softmax_vectorization_kernel[(n_rows, )](
+        pgm = _softmax_vectorization_kernel[(n_rows, )](
             y,
             x,
             x.stride(0),
@@ -4767,6 +4769,20 @@ def test_softmax_vectorization_correctness(n_cols, device):
             num_warps=8,
         )
         torch.testing.assert_close(y, expected, rtol=1e-4, atol=1e-6, msg=provider)
+        ptx = pgm.asm["ptx"]
+        assert ".target sm_100" in ptx, provider
+        if num_stages == 1:
+            assert "cp.async" not in ptx, provider
+            if provider == "triton-256" and ".version 8.8" in ptx:
+                assert re.search(r"ld\.global(?:\.[a-zA-Z0-9_:]+)*\.v4\.b64", ptx), provider
+                assert re.search(r"st\.global(?:\.[a-zA-Z0-9_:]+)*\.v4\.b64", ptx), provider
+            else:
+                assert re.search(r"ld\.global(?:\.[a-zA-Z0-9_:]+)*\.v4\.b32", ptx), provider
+                assert re.search(r"st\.global(?:\.[a-zA-Z0-9_:]+)*\.v4\.b32", ptx), provider
+        else:
+            assert "cp.async.cg.shared.global" in ptx, provider
+            assert "cp.async.wait_group" in ptx, provider
+            assert re.search(r"st\.global(?:\.[a-zA-Z0-9_:]+)*\.v4\.b32", ptx), provider
 
 
 @pytest.mark.interpreter
