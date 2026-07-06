@@ -122,9 +122,8 @@ class NvidiaTargetDescriptor:
 def _normalize_cuda_arch(arch: Union[int, str], *, allow_ambiguous_sm90_plus: bool) -> str:
     if isinstance(arch, int):
         if arch >= 90 and not allow_ambiguous_sm90_plus:
-            raise ValueError(
-                f"CUDA target sm{arch} is ambiguous. Use an explicit target string, "
-                f"e.g. sm{arch} or sm{arch}a.")
+            raise ValueError(f"CUDA target sm{arch} is ambiguous. Use an explicit target string, "
+                             f"e.g. sm{arch} or sm{arch}a.")
         return f"sm{arch}"
 
     if not isinstance(arch, str):
@@ -141,10 +140,8 @@ def _normalize_cuda_arch(arch: Union[int, str], *, allow_ambiguous_sm90_plus: bo
     if re.fullmatch(r"\d+", arch):
         capability = int(arch)
         if capability >= 90 and not allow_ambiguous_sm90_plus:
-            raise ValueError(
-                f"CUDA target sm{capability} is ambiguous. Use an explicit target string, "
-                f"e.g. sm{capability} or sm{capability}a."
-            )
+            raise ValueError(f"CUDA target sm{capability} is ambiguous. Use an explicit target string, "
+                             f"e.g. sm{capability} or sm{capability}a.")
         return f"sm{capability}"
 
     pattern = r"^sm(\d+)(a?)$"

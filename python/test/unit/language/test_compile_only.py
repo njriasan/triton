@@ -85,9 +85,8 @@ def test_compile_only_rejects_ambiguous_cuda_targets(capability) -> None:
 
     with pytest.raises(ValueError, match=f"sm{capability} is ambiguous"):
         triton.compile(
-            triton.compiler.ASTSource(
-                fn=kernel_add, signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"}, constexprs={}),
-            target=GPUTarget("cuda", capability, 32))
+            triton.compiler.ASTSource(fn=kernel_add, signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"},
+                                      constexprs={}), target=GPUTarget("cuda", capability, 32))
 
 
 def test_compile_only_ws_cluster_barrier_shared_memory(tmp_path) -> None:

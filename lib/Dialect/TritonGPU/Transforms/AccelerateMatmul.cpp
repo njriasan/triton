@@ -534,9 +534,8 @@ public:
       return failure();
     }
 
-    auto mmaVersion =
-        getMMAVersionSafe(computeCapability, supportsMMA3,
-                          /*supportsMMA5=*/false, dotOp);
+    auto mmaVersion = getMMAVersionSafe(computeCapability, supportsMMA3,
+                                        /*supportsMMA5=*/false, dotOp);
     auto mmaResult =
         createMMAEncodingForDot(dotOp, rewriter, computeCapability, mmaVersion);
     if (!(mmaResult.versionMajor >= 1 && mmaResult.versionMajor <= 3))
@@ -657,9 +656,8 @@ public:
     int numWarps = lookupNumWarps(dotOp);
     auto CGALayout = getCGALayout(oldRetType.getEncoding());
 
-    int versionMajor =
-        getMMAVersionSafe(computeCapability, /*supportsMMA3=*/false,
-                          supportsMMA5, dotOp);
+    int versionMajor = getMMAVersionSafe(
+        computeCapability, /*supportsMMA3=*/false, supportsMMA5, dotOp);
     if (versionMajor != 5)
       return failure();
     Location loc = dotOp.getLoc();

@@ -76,8 +76,7 @@ LogicalResult WarpGroupDotOp::inferReturnTypes(
 
 LogicalResult WarpGroupDotOp::verify() {
   if (auto moduleOp = getOperation()->getParentOfType<ModuleOp>()) {
-    auto targetAttr =
-        moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
+    auto targetAttr = moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
     if (targetAttr && targetAttr.getValue().starts_with("cuda:") &&
         !TargetFeatures::fromModuleOp(moduleOp).supportMMA3()) {
       return emitOpError("requires an accelerated NVIDIA target such as sm90a "

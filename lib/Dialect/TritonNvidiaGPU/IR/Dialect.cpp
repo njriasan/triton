@@ -457,8 +457,7 @@ LogicalResult TensorMemoryScalesEncodingAttr::verify(
 
 LogicalResult impl::verifyMMAv5Op(Operation *op) {
   if (auto moduleOp = op->getParentOfType<ModuleOp>()) {
-    auto targetAttr =
-        moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
+    auto targetAttr = moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
     if (targetAttr && targetAttr.getValue().starts_with("cuda:") &&
         !TargetFeatures::fromModuleOp(moduleOp).supportMMA5()) {
       return op->emitOpError(
