@@ -5,7 +5,7 @@
 #shared_gather_bcast = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 16, CGALayout = [[0, 0]]}>
 #smem = #ttg.shared_memory
 
-module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
 
 // CHECK-LABEL: @tma_gather_multicast
 tt.func public @tma_gather_multicast(%arg0: !tt.tensordesc<1x128xbf16, #shared_gather_bcast>, %arg1: !ttg.memdesc<1xi64, #shared_bar_bcast, #smem, mutable>, %arg2: tensor<32xi32, #ttg.slice<{dim = 0, parent = #blocked_bcast}>>, %arg3: i32, %arg4: !ttg.memdesc<32x128xbf16, #shared_gather_bcast, #smem, mutable>, %arg5: i1) {

@@ -16,7 +16,7 @@
 #tmem1 = #ttng.tensor_memory_encoding<blockM = 128, blockN = 64, colStride = 1>
 #smem = #ttg.shared_memory
 
-module attributes {ttg.target = "cuda:100", "ttg.num-warps" = 8 : i32} {
+module attributes {ttg.target = "cuda:sm100a", "ttg.num-warps" = 8 : i32} {
 
 // CHECK-LABEL: @no_tensor_computations
 tt.func @no_tensor_computations(%arg0: i32) {

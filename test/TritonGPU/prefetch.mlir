@@ -449,7 +449,7 @@ tt.func @prefetch_induction_var_source(%lb : index, %ub : index, %step : index, 
 // CHECK-DAG: %[[B1:.+]] = ttg.local_load %[[B1_SMEM]] token %[[B_WAIT_ARG]]
 // CHECK: %[[DOT0:.+]] = tt.dot %[[A0_ARG]], %[[B0_ARG]], %[[ACC_ARG]]
 // CHECK: tt.dot %[[A1]], %[[B1]], %[[DOT0]]
-module attributes {ttg.target = "cuda:90", "ttg.num-warps" = 1 : i32} {
+module attributes {ttg.target = "cuda:sm90a", "ttg.num-warps" = 1 : i32} {
 tt.func @split_pipelined_mmav2_loads_f64(%lb : index, %ub : index, %step : index, %tok0 : !ttg.async.token, %tok1 : !ttg.async.token) -> tensor<16x16xf64, #mma_f64> {
   %c0_i32 = arith.constant 0 : i32
   %c1_i32 = arith.constant 1 : i32

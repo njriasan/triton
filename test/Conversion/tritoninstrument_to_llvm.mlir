@@ -2,7 +2,7 @@
 
 #blocked = #ttg.blocked<{sizePerThread = [2], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK: global internal constant @tensor_constant_1([34359738368, 68719476736]) {addr_space = 0 : i32} : !llvm.array<2 x i64>
 // CHECK: global internal constant @tensor_constant_0([0, 42]) {addr_space = 0 : i32} : !llvm.array<2 x i64>
 
@@ -18,7 +18,7 @@ tt.func private @experimental_buffer_descriptors_tmem() {
 
 #blocked = #ttg.blocked<{sizePerThread = [2], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK: global internal constant @tensor_constant_1([17179869184, 51539607552])
 // CHECK: global internal constant @tensor_constant_0([0, 42])
 
@@ -35,7 +35,7 @@ tt.func private @experimental_buffer_descriptors_shared() {
 #blocked = #ttg.blocked<{sizePerThread = [2], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 32}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_lock_acquire
 // CHECK: 09atom.global.acquire.gpu.cas.b32
 // CHECK: nvvm.barrier
@@ -53,7 +53,7 @@ tt.func private @experimental_lock_acquire(
 #blocked = #ttg.blocked<{sizePerThread = [2], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 32}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_lock_release
 // CHECK: nvvm.barrier
 // CHECK: atom.global.release.gpu.exch.b32
@@ -71,7 +71,7 @@ tt.func private @experimental_lock_release(
 #blocked = #ttg.blocked<{sizePerThread = [2], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 32}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_memdesc_to_i32
 // CHECK:  llvm.ptrtoint %1 : !llvm.ptr<3> to i32
 tt.func private @experimental_memdesc_to_i32(
@@ -85,7 +85,7 @@ tt.func private @experimental_memdesc_to_i32(
 // -----
 
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 32}>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_gsan_tensordesc_info
 // CHECK-NOT: llvm.getelementptr
 // CHECK-NOT: llvm.inttoptr
@@ -112,7 +112,7 @@ tt.func private @experimental_gsan_tensordesc_info(
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_fpsan_embed
 // CHECK-NOT: tti.experimental_fpsan_embed
 // CHECK: %[[RAW:.*]] = llvm.bitcast %arg0 : f32 to i32
@@ -127,7 +127,7 @@ tt.func private @experimental_fpsan_embed(%arg0: f32) -> i32 {
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_fpsan_unembed
 // CHECK-NOT: tti.experimental_fpsan_unembed
 // CHECK: llvm.mul %arg0,
@@ -144,7 +144,7 @@ tt.func private @experimental_fpsan_unembed(%arg0: i32) -> f32 {
 #local_gather_blocked = #ttg.blocked<{sizePerThread = [1, 1], threadsPerWarp = [1, 32], warpsPerCTA = [1, 4], order = [1, 0], CGALayout = [[0, 1]]}>
 #local_gather_shared = #ttg.swizzled_shared<{vec = 1, perPhase = 1, maxPhase = 1, order = [1, 0], CGALayout = [[0, 1]]}>
 
-module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32, ttg.target = "cuda:90"} {
+module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32, ttg.target = "cuda:sm90a"} {
 // CHECK-LABEL: @experimental_local_gather
 // CHECK: nvvm.mapa
 // CHECK: llvm.load {{.*}} : !llvm.ptr<7> -> i32

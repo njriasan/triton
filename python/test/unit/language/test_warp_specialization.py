@@ -62,7 +62,7 @@ def test_warp_specialize_tmem_ir(tmp_path: pathlib.Path):
     #shared = #ttg.swizzled_shared<{vec=1, perPhase=1, maxPhase=1, order=[1, 0]}>
     #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 64, colStride = 1>
 
-    module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.threads-per-warp" = 32 : i32} {
+    module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.threads-per-warp" = 32 : i32} {
 
     tt.func @test_tmem_ws(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}) {
       %cst = arith.constant dense<64> : tensor<128x64xi32, #blocked>

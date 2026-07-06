@@ -126,6 +126,15 @@ class IRSource:
             num_ctas = self.module.get_int_attr("ttg.num-ctas")
             if num_ctas is not None:
                 options['num_ctas'] = num_ctas
+            target = self.module.get_str_attr("ttg.target")
+            if target is not None:
+                backend, arch = target.split(":", 1)
+                if backend == "cuda" and re.fullmatch(r"\d+", arch):
+                    # Existing textual TTGIR may still use cuda:80. Backend
+                    # option parsing canonicalizes this to sm80 below.
+                    options['arch'] = arch
+                elif backend == "cuda":
+                    options['arch'] = arch
             return options
         return dict()
 

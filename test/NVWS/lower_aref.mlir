@@ -211,7 +211,7 @@ module attributes {"ttg.num-warps" = 4 : i32} {
 #shared2 = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = true, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   tt.func @warp_specialize_tma_matmul(%arg0: i32, %arg1: i32, %arg2: i32, %arg3: !tt.tensordesc<128x64xf16, #shared>, %arg4: !tt.tensordesc<128x64xf16, #shared>) {
     %0 = ub.poison : !ttg.async.token
     %cst = arith.constant dense<0.000000e+00> : tensor<128x128xf32, #blocked>
@@ -274,7 +274,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #blocked = #ttg.blocked<{sizePerThread = [1, 1], threadsPerWarp = [1, 32], warpsPerCTA = [2, 2], order = [1, 0]}>
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   tt.func @load_used_as_reg_and_smem(%arg0: !tt.tensordesc<128x64xf16, #shared>, %arg1: i32) {
     %c1_i32 = arith.constant 1 : i32
     %c0_i32 = arith.constant 0 : i32
@@ -314,7 +314,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #blocked = #ttg.blocked<{sizePerThread = [1, 1], threadsPerWarp = [1, 32], warpsPerCTA = [2, 2], order = [1, 0]}>
 #shared = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = false, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   tt.func @load_used_as_reg_and_smem_same_partition(%arg0: !tt.tensordesc<128x64xf16, #shared>, %arg1: i32) {
     %c1_i32 = arith.constant 1 : i32
     %c0_i32 = arith.constant 0 : i32
@@ -354,7 +354,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #shared1 = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = true, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   // CHECK-LABEL: @lower_aref_buffer
   tt.func @lower_aref_buffer(%arg0: !tt.tensordesc<128x64xf16, #shared>, %arg1: !tt.tensordesc<64x128xf16, #shared>) {
     %c32_i32 = arith.constant 32 : i32
@@ -468,7 +468,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
 #tmem_scales = #ttng.tensor_memory_scales_encoding<>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
 
   // CHECK-LABEL: @load_scale_mma_user
   tt.func @load_scale_mma_user(%arg0: !ttg.memdesc<128x64xf16, #shared, #smem>, %arg1: !ttg.memdesc<64x128xf16, #shared, #smem>, %arg2: !tt.tensordesc<8x128xi8, #shared>, %arg3: !ttg.memdesc<128x8xi8, #tmem_scales, #ttng.tensor_memory>, %arg4: i32) {
@@ -520,7 +520,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #shared2 = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = true, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 64, colStride = 1>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   tt.func public @attention_forward(%arg0: !ttg.memdesc<256x64xf16, #shared, #smem>, %arg1: !tt.tensordesc<64x64xf16, #shared>, %arg2: !tt.tensordesc<64x64xf16, #shared>, %arg3: f32, %arg4: i32, %arg5: !tt.ptr<f32>) {
     %cst = arith.constant dense<1.000000e+00> : tensor<256xf32, #ttg.slice<{dim = 1, parent = #blocked}>>
     %cst_0 = arith.constant dense<0.000000e+00> : tensor<256x64xf32, #blocked>

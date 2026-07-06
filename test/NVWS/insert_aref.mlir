@@ -13,7 +13,7 @@
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
 #tmem_scales = #ttng.tensor_memory_scales_encoding<>
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   // FUNC-LABEL: @warp_specialize_tma_matmul
   // CHECK: @warp_specialize_tma_matmul
   tt.func @warp_specialize_tma_matmul(%arg0: i32, %arg1: i32, %arg2: i32, %arg3: !tt.tensordesc<128x64xf16, #shared>, %arg4: !tt.tensordesc<128x64xf16, #shared>) {
@@ -239,7 +239,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #shared_scale_a_final = #ttg.shared_linear<{offset = [[0, 1], [0, 2], [32, 0], [64, 0], [1, 0], [2, 0], [4, 0], [8, 0], [16, 0], [0, 4], [128, 0]]}, alignment = 128>
 #smem_scale = #ttg.shared_memory
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   // CHECK-LABEL: tt.func @descriptor_backed_shared_linear_alloc
   // CHECK-SAME: (%arg0: !tt.tensordesc<1x2x2x2x256xi8, [[DESC_ENC:#[A-Za-z0-9_]+]]>, %arg1: i32)
   tt.func @descriptor_backed_shared_linear_alloc(%arg0: !tt.tensordesc<1x2x2x2x256xi8, #shared_scale_tma>, %arg1: i32) {
@@ -730,7 +730,7 @@ tt.func @cycle_in_partition(%lb: i32, %ub: i32, %step: i32) {
 #shared1 = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = true, elementBitWidth = 8}>
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @inner_loop_fixed_operand(%arg0: !tt.tensordesc<128x128xf8E4M3FN, #shared>, %arg1: !tt.tensordesc<128x128xf8E4M3FN, #shared>, %arg2: !tt.tensordesc<128x128xf8E4M3FN, #shared>, %arg3: i32 {tt.divisibility = 16 : i32}, %arg4: i32 {tt.divisibility = 16 : i32}, %arg5: i32 {tt.divisibility = 16 : i32}) attributes {noinline = false} {
     %false = arith.constant false
     %true = arith.constant true

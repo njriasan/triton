@@ -25,7 +25,7 @@ def ConvertTritonToTritonGPU: Pass<"convert-triton-to-tritongpu", "mlir::ModuleO
    let options = [
       Option<"target", "target",
             "std::string", /*default*/"\"\"",
-            "the GPU target, e.g., cuda:80, hip:gfx942">,
+            "the GPU target, e.g., cuda:sm90a, cuda:80, hip:gfx942">,
       Option<"numWarps", "num-warps",
              "int32_t", /*default*/"4",
              "number of warps">,

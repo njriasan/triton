@@ -11,7 +11,10 @@ namespace mlir::triton::nvidia_gpu {
 class TargetFeatures {
 public:
   explicit TargetFeatures(int computeCapability)
-      : computeCapability(computeCapability) {}
+      : computeCapability(computeCapability), acceleratedFeatures(false) {}
+  TargetFeatures(int computeCapability, bool acceleratedFeatures)
+      : computeCapability(computeCapability),
+        acceleratedFeatures(acceleratedFeatures) {}
 
   static TargetFeatures fromModuleOp(ModuleOp moduleOp) {
     auto targetAttr =
@@ -22,19 +25,41 @@ public:
     assert(targetName.starts_with(kTargetPrefix) &&
            "expected target attribute to be prefixed with \"cuda:\"");
 
+    StringRef arch = targetName.drop_front(sizeof(kTargetPrefix) - 1);
+    bool acceleratedFeatures = false;
+    if (arch.starts_with("sm_"))
+      arch = arch.drop_front(3);
+    else if (arch.starts_with("sm"))
+      arch = arch.drop_front(2);
+
+    if (arch.ends_with("a")) {
+      acceleratedFeatures = true;
+      arch = arch.drop_back(1);
+    }
+
     int computeCapability;
-    bool parseError = targetName.drop_front(sizeof(kTargetPrefix) - 1)
-                          .getAsInteger(10, computeCapability);
+    bool parseError = arch.getAsInteger(10, computeCapability);
     assert(!parseError &&
            "invalid compute capability string in target attribute");
 
-    return TargetFeatures(computeCapability);
+    return TargetFeatures(computeCapability, acceleratedFeatures);
   }
 
   int getComputeCapability() const { return computeCapability; }
+  bool hasAcceleratedFeatures() const { return acceleratedFeatures; }
 
   bool supportClusterOps() const {
     return computeCapability >= 90 && computeCapability / 10 != 12;
+  }
+
+  bool supportMMA3() const {
+    return computeCapability >= 90 && computeCapability < 120 &&
+           acceleratedFeatures;
+  }
+
+  bool supportMMA5() const {
+    return computeCapability >= 100 && computeCapability < 120 &&
+           acceleratedFeatures;
   }
 
   bool supportMaximumMinimum() const { return computeCapability >= 80; }
@@ -57,6 +82,7 @@ private:
   static constexpr char kTargetPrefix[] = "cuda:";
 
   int computeCapability;
+  bool acceleratedFeatures;
 };
 
 } // namespace mlir::triton::nvidia_gpu

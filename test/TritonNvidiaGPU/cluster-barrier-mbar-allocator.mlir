@@ -5,7 +5,7 @@
 #blockedBroadcast = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], warpsPerCTA = [4], order = [0], CGALayout = [[0]]}>
 #slice0 = #ttg.slice<{dim = 0, parent = #blockedSplitM}>
 
-module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.shared = 5 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.shared = 5 : i32, ttg.target = "cuda:sm90a", "ttg.threads-per-warp" = 32 : i32} {
   // CHECK: module attributes {
   // CHECK-DAG: ttg.shared = 72 : i32
   // CHECK-DAG: ttg.ws_cluster_barrier_count = 2 : i32

@@ -6307,8 +6307,8 @@ def test_override_arch(arch, env_var_override, device, fresh_knobs):
             h = simple.warmup(data, out, grid=(1, ))
         else:
             h = simple.warmup(data, out, arch=arch, grid=(1, ))
-        ttgir_cc = re.search(r'cuda:(\d+)', h.asm["ttgir"])
-        assert ttgir_cc.group(1) == arch[2:]
+        ttgir_cc = re.search(r'cuda:(sm\d+a?)', h.asm["ttgir"])
+        assert ttgir_cc.group(1) == arch
     elif is_hip():
         # For HIP, the generated kernel is a binary containing the final ISA. So we cannot run
         # them like CUDA side if the chip doesn't match. Here we just check generated ISA.

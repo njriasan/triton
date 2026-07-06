@@ -12,7 +12,7 @@
                             warp = [[128], [256], [512]],
                             block = []}>
 
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:100", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:sm100a", "ttg.threads-per-warp" = 32 : i32} {
   // CHECK-LABEL: llvm.func @cat_broadcast
   tt.func @cat_broadcast() {
     %c0_i32 = arith.constant 0 : i32

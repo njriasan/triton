@@ -962,7 +962,7 @@ llvm.func @no_captures() attributes {allocation.offset = 0 : i32} {
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.total-num-warps" = 6 : i32} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.total-num-warps" = 6 : i32} {
 
 llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
 
@@ -994,7 +994,7 @@ llvm.func @type_conversion_results() attributes {allocation.offset = 0 : i32} {
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.total-num-warps" = 6 : i32} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.total-num-warps" = 6 : i32} {
 
 llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
 
@@ -1096,7 +1096,7 @@ llvm.func @remat_subgraph(%arg0: i32, %arg1: i32) attributes {allocation.offset 
 
 // -----
 
-module attributes {ttg.maxnreg = 80 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.total-num-warps" = 16 : i32} {
+module attributes {ttg.maxnreg = 80 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.total-num-warps" = 16 : i32} {
 
 llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
 
@@ -1170,7 +1170,7 @@ llvm.func @dynamic_register_reallocation() attributes {allocation.offset = 0 : i
 
 // -----
 
-module attributes {ttg.maxnreg = 128 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.total-num-warps" = 16 : i32} {
+module attributes {ttg.maxnreg = 128 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.total-num-warps" = 16 : i32} {
 
 llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
 
@@ -1244,7 +1244,7 @@ llvm.func @dynamic_register_reallocation_overalloc() attributes {allocation.offs
 
 // -----
 
-module attributes {ttg.maxnreg = 80 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.total-num-warps" = 8 : i32} {
+module attributes {ttg.maxnreg = 80 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.total-num-warps" = 8 : i32} {
 
 llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
 

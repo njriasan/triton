@@ -128,7 +128,7 @@ tt.func @test_canonicalize_convert_local_load(%arg0: !ttg.async.token) -> tensor
 #linear = #ttg.linear<{register = [[0, 1], [0, 2], [0, 4], [0, 8], [0, 16]], lane = [[1, 0], [2, 0], [4, 0], [8, 0], [16, 0]], warp = [[32, 0], [64, 0], [0, 32]], block = []}>
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 64, colStride = 1>
 // CHECK-LABEL: test_canonicalize_convert_tmem_store
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:100", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:sm100a", "ttg.threads-per-warp" = 32 : i32} {
   tt.func @test_canonicalize_convert_tmem_store(
     %arg0: tensor<128x64xbf16, #linear>,
     %arg1: !ttg.memdesc<128x64xbf16, #tmem, #ttng.tensor_memory, mutable>

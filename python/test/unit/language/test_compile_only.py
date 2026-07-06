@@ -2,10 +2,11 @@ import triton
 import triton.language as tl
 from triton.backends.compiler import GPUTarget
 import re
+import pytest
 from triton.compiler import ASTSource
 
 
-def test_compile_only_sm100() -> None:
+def test_compile_only_sm100a() -> None:
 
     @triton.jit
     def kernel_add(a, b, c):
@@ -14,17 +15,85 @@ def test_compile_only_sm100() -> None:
 
     k = triton.compile(
         triton.compiler.ASTSource(fn=kernel_add, signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"}, constexprs={}),
-        target=GPUTarget("cuda", 100, 32))
+        target=GPUTarget("cuda", "sm100a", 32))
     ptx = k.asm["ptx"]
     assert ".target sm_100a" in ptx
     assert ".address_size 64" in ptx
     assert k.asm["cubin"] != b""
 
 
+def test_blackwell_runtime_target_is_explicit_sm100a() -> None:
+    try:
+        target = triton.runtime.driver.active.get_current_target()
+    except RuntimeError:
+        pytest.skip("No active runtime driver")
+    if target.backend != "cuda":
+        pytest.skip("CUDA-only runtime target check")
+    if target.arch not in ("sm100", "sm100a"):
+        pytest.skip("Requires Blackwell runtime target")
+    assert target.arch == "sm100a"
+
+
+def test_compile_only_sm100_no_accelerated_ptx() -> None:
+
+    @triton.jit
+    def kernel_add(a, b, c):
+        idx = tl.arange(0, 32)
+        tl.store(c + idx, tl.load(a + idx) + tl.load(b + idx))
+
+    k = triton.compile(
+        triton.compiler.ASTSource(fn=kernel_add, signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"}, constexprs={}),
+        target=GPUTarget("cuda", "sm100", 32))
+    ptx = k.asm["ptx"]
+    assert ".target sm_100" in ptx
+    assert ".target sm_100a" not in ptx
+    assert "tcgen05" not in ptx
+    assert k.asm["cubin"] != b""
+
+
+@pytest.mark.parametrize("arch,forbidden", [("sm90", "wgmma"), ("sm100", "tcgen05")])
+def test_compile_only_portable_dot_no_accelerated_ptx(arch, forbidden) -> None:
+
+    @triton.jit
+    def simple_dot(a_base, b_base, out):
+        SIZE: tl.constexpr = 64
+        a_ptr = a_base + tl.arange(0, SIZE)[:, None] * SIZE + tl.arange(0, SIZE)[None, :]
+        b_ptr = b_base + tl.arange(0, SIZE)[:, None] * SIZE + tl.arange(0, SIZE)[None, :]
+        a = tl.load(a_ptr)
+        b = tl.load(b_ptr)
+        c = tl.dot(a, b)
+        out_ptr = out + tl.arange(0, SIZE)[:, None] * SIZE + tl.arange(0, SIZE)[None, :]
+        tl.store(out_ptr, c)
+
+    k = triton.compile(
+        triton.compiler.ASTSource(fn=simple_dot, signature={"a_base": "*fp16", "b_base": "*fp16", "out": "*fp16"},
+                                  constexprs={}), target=GPUTarget("cuda", arch, 32))
+    ptx = k.asm["ptx"]
+    assert f".target sm_{arch[2:]}" in ptx
+    assert f".target sm_{arch[2:]}a" not in ptx
+    assert f"{forbidden}" not in ptx
+    assert k.asm["cubin"] != b""
+
+
+@pytest.mark.parametrize("capability", [90, 100])
+def test_compile_only_rejects_ambiguous_cuda_targets(capability) -> None:
+
+    @triton.jit
+    def kernel_add(a, b, c):
+        idx = tl.arange(0, 32)
+        tl.store(c + idx, tl.load(a + idx) + tl.load(b + idx))
+
+    with pytest.raises(ValueError, match=f"sm{capability} is ambiguous"):
+        triton.compile(
+            triton.compiler.ASTSource(
+                fn=kernel_add, signature={"a": "*fp32", "b": "*fp32", "c": "*fp32"}, constexprs={}),
+            target=GPUTarget("cuda", capability, 32))
+
+
 def test_compile_only_ws_cluster_barrier_shared_memory(tmp_path) -> None:
     src = """
 #shared = #ttg.swizzled_shared<{vec = 1, perPhase = 1, maxPhase = 1, order = [0], CGALayout = [[0]]}>
-module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @ws_cluster_barrier() {
     %alloc = ttg.local_alloc : () -> !ttg.memdesc<5xi8, #shared, #ttg.shared_memory, mutable>
     ttg.warp_specialize()
@@ -41,8 +110,10 @@ module attributes {"ttg.num-ctas" = 2 : i32, "ttg.num-warps" = 4 : i32, ttg.targ
 """
     temp_file = tmp_path / "ws_cluster_barrier.ttgir"
     temp_file.write_text(src)
-    k = triton.compile(str(temp_file), target=GPUTarget("cuda", 90, 32))
+    k = triton.compile(str(temp_file), target=GPUTarget("cuda", "sm90", 32))
     ptx = k.asm["ptx"]
+    assert ".target sm_90" in ptx
+    assert ".target sm_90a" not in ptx
     assert "mbarrier.arrive.release.cluster.shared::cluster.b64" in ptx
     assert "mbarrier.try_wait.parity.acquire.cluster.shared::cta.b64" in ptx
     assert "mapa" not in ptx
@@ -64,7 +135,7 @@ def test_compile_only_expect_zero() -> None:
         signature={"x_ptr": "*fp32", "out_ptr": "*fp32", "BLOCK_SIZE": "constexpr"},
         constexprs={"BLOCK_SIZE": 16},
     )
-    target = GPUTarget("cuda", 100, 32)
+    target = GPUTarget("cuda", "sm100a", 32)
 
     regular = triton.compile(src, target=target)
     assert "arith.select" not in regular.asm["ttir"]
@@ -94,7 +165,7 @@ def test_compile_only_dot() -> None:
 
     k = triton.compile(
         triton.compiler.ASTSource(fn=simple_dot, signature={"a_base": "*fp16", "b_base": "*fp16", "out": "*fp16"},
-                                  constexprs={}), target=GPUTarget("cuda", 100, 32))
+                                  constexprs={}), target=GPUTarget("cuda", "sm100a", 32))
     ttgir = k.asm["ttgir"]
     pattern = (r"%(?P<A>\w+) = tt\.load"
                r"(.|\n)*?"
@@ -154,7 +225,7 @@ def test_compile_only_k_loop() -> None:
     k = triton.compile(
         triton.compiler.ASTSource(fn=k_loop,
                                   signature={"a_base": "*fp16", "b_base": "*fp16", "out": "*fp16", "k_tiles":
-                                             "i32"}, constexprs={}), target=GPUTarget("cuda", 100, 32))
+                                             "i32"}, constexprs={}), target=GPUTarget("cuda", "sm100a", 32))
     ttgir = k.asm["ttgir"]
 
     pattern = (r"%(?P<TMEM_BASE>\w+) = arith.constant dense<0.000000e\+00>"
@@ -206,7 +277,7 @@ def test_compile_only_dot_mxfp() -> None:
             fn=simple_dot_mxfp, signature={
                 "a_base": "*u8", "b_base": "*u8", "a_scale": "*u8", "b_scale": "*u8", "out": "*fp32", "BLOCK_M":
                 "constexpr", "BLOCK_N": "constexpr", "BLOCK_K": "constexpr"
-            }, constexprs={"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 64}), target=GPUTarget("cuda", 100, 32))
+            }, constexprs={"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 64}), target=GPUTarget("cuda", "sm100a", 32))
     ttgir = k.asm["ttgir"]
     pattern = (r"ttng.tc_gen5_mma_scaled (.*) lhs = e4m3 rhs = e4m3")
     assert re.search(pattern, str(ttgir)), "The TTGIR does not match the expected pattern."
@@ -276,5 +347,5 @@ def test_fp8_compiles_for_multiple_architectures_cuda():
         tl.store(dst + idx, tl.load(src + idx).to(tl.float8e5))
 
     src = ASTSource(fn=fp8_convert, signature={"src": "*fp32", "dst": "*fp8e5"}, constexprs={})
-    triton.compile(src, target=GPUTarget("cuda", 90, 32))
+    triton.compile(src, target=GPUTarget("cuda", "sm90a", 32))
     triton.compile(src, target=GPUTarget("cuda", 80, 32))

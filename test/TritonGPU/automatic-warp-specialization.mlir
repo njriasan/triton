@@ -15,7 +15,7 @@
 #smem = #ttg.shared_memory
 #acc_tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
 
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
 
 // CHECK-LABEL: @matmul_change_desc_in_prologue
 tt.func @matmul_change_desc_in_prologue(
@@ -197,7 +197,7 @@ tt.func @matmul_tma_and_regular_load(
 
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 64, colStride = 1>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
 
 // CHECK-LABEL: @attention_forward
 tt.func public @attention_forward(
@@ -292,7 +292,7 @@ tt.func public @attention_forward(
 // -----
 
 #indices_layout = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a"} {
   // CHECK-LABEL: @no_eligible_memory_ops
   tt.func @no_eligible_memory_ops(%arg0: i32, %arg1: tensor<128xf32, #indices_layout>) {
     %c0_i32 = arith.constant 0 : i32
@@ -319,7 +319,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:100"} {
 #shared1 = #ttg.nvmma_shared<{swizzlingByteWidth = 128, transposed = true, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
 #tmem = #ttng.tensor_memory_encoding<blockM = 128, blockN = 128, colStride = 1>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:100", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm100a", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @grouped_matmul_tma_kernel(%group_a_ptrs: !tt.ptr<i64> {tt.divisibility = 16 : i32}, %group_b_ptrs: !tt.ptr<i64> {tt.divisibility = 16 : i32} , %group_c_ptrs: !tt.ptr<i64> {tt.divisibility = 16 : i32}, %gm: i32 {tt.divisibility = 16 : i32}, %gn: i32 {tt.divisibility = 16 : i32}, %gk: i32 {tt.divisibility = 16 : i32}, %group_size: i32) attributes {noinline = false} {
     %false = arith.constant false
     %true = arith.constant true

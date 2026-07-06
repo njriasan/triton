@@ -456,6 +456,16 @@ LogicalResult TensorMemoryScalesEncodingAttr::verify(
 }
 
 LogicalResult impl::verifyMMAv5Op(Operation *op) {
+  if (auto moduleOp = op->getParentOfType<ModuleOp>()) {
+    auto targetAttr =
+        moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
+    if (targetAttr && targetAttr.getValue().starts_with("cuda:") &&
+        !TargetFeatures::fromModuleOp(moduleOp).supportMMA5()) {
+      return op->emitOpError(
+          "requires an accelerated NVIDIA target such as sm100a");
+    }
+  }
+
   auto isInterleaved = [](MemDescType memdesc) {
     auto enc = dyn_cast<TensorMemoryEncodingAttr>(memdesc.getEncoding());
     return enc && getTmemAllocSizes(memdesc).numRows != 64 &&

@@ -1,6 +1,6 @@
 // RUN: triton-opt %s -split-input-file --gluon-infer-coalesced-encodings -verify-diagnostics
 
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a", "ttg.threads-per-warp" = 32 : i32} {
 tt.func public @divisibility_conflict( %in_ptr : !tt.ptr<f32>, %out_ptr : !tt.ptr<f32>) {
     %mask = arith.constant dense<1> : tensor<128x256xi1, #gluon.auto_encoding>
     %offsets = arith.constant dense<0> : tensor<128x256xi32, #gluon.auto_encoding>

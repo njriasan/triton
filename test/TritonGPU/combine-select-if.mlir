@@ -25,7 +25,7 @@ tt.func public @select_if_combine(%arg0: tensor<64xf32>, %dst_ptr: tensor<64x!tt
 // -----
 // CHECK-LABEL: @if_multiple_sel
 #blocked = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90a", "ttg.threads-per-warp" = 32 : i32} {
   tt.func @if_multiple_sel(%arg0: i1, %arg1: tensor<64xi32, #blocked>, %arg2: tensor<64xi32, #blocked>, %arg3: tensor<64xf32, #blocked>, %arg4: tensor<64xf32, #blocked>) -> (tensor<64xi32, #blocked>, tensor<64xf32, #blocked>, tensor<64xi32, #blocked>){
   // CHECK-NOT: select
   // CHECK: %[[R:.+]]:3 = scf.if %{{.*}} -> (tensor<64xi32, #blocked>, tensor<64xi32, #blocked>, tensor<64xf32, #blocked>) {
