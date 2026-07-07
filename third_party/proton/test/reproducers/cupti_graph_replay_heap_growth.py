@@ -746,10 +746,7 @@ def _run_single(args: argparse.Namespace) -> int:
     if selected_cupti_dir is None:
         generic_dir, blackwell_dir = _detect_packaged_cupti_dirs()
         target = triton.runtime.driver.active.get_current_target()
-        arch = target.arch
-        if target.backend == "cuda" and isinstance(arch, str):
-            arch = int(arch.removeprefix("sm").removeprefix("_").removesuffix("a"))
-        selected_cupti_dir = blackwell_dir if target.backend == "cuda" and arch >= 100 else generic_dir
+        selected_cupti_dir = blackwell_dir if target.backend == "cuda" and target.capability >= 100 else generic_dir
 
     run_metadata = {
         "label": args.label,

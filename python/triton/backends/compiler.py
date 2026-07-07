@@ -15,6 +15,12 @@ def _cuda_arch_to_capability(arch: Union[int, str]) -> int:
     return int(match.group(1))
 
 
+@functools.lru_cache(maxsize=None)
+def cuda_arch_from_capability(capability: int) -> str:
+    suffix = "a" if capability in (90, 100) else ""
+    return f"sm{capability}{suffix}"
+
+
 @dataclass(frozen=True)
 class GPUTarget(object):
     # Target backend, e.g., cuda, hip
@@ -22,6 +28,10 @@ class GPUTarget(object):
     # Target architecture, e.g., 90 (for cuda compute capability), gfx940 (for hip)
     arch: Union[int, str]
     warp_size: int
+
+    @classmethod
+    def from_cuda_capability(cls, capability: int, warp_size: int = 32):
+        return cls("cuda", cuda_arch_from_capability(capability), warp_size)
 
     @property
     def capability(self) -> int:

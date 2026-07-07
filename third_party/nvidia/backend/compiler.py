@@ -163,11 +163,6 @@ def make_cuda_arch(arch: Union[int, str], *, allow_ambiguous_sm90_plus: bool = F
     return NvidiaTargetDescriptor(arch=normalized, capability=int(match.group(1)), suffix=match.group(2))
 
 
-def explicit_cuda_arch_from_capability(capability: int):
-    suffix = "a" if capability in (90, 100) else ""
-    return f"sm{capability}{suffix}"
-
-
 @dataclass(frozen=True)
 class CUDAOptions:
     num_warps: int = 4

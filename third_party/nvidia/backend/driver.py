@@ -366,13 +366,9 @@ class CudaDriver(GPUDriver):
 
     def get_current_target(self):
         device = self.get_current_device()
-        capability = self.get_device_capability(device)
-        capability = capability[0] * 10 + capability[1]
-        warp_size = 32
-        arch = f"sm{capability}"
-        if capability in (90, 100):
-            arch += "a"
-        return GPUTarget("cuda", arch, warp_size)
+        major, minor = self.get_device_capability(device)
+        capability = major * 10 + minor
+        return GPUTarget.from_cuda_capability(capability)
 
     def get_active_torch_device(self):
         import torch
