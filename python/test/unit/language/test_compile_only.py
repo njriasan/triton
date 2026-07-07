@@ -347,4 +347,4 @@ def test_fp8_compiles_for_multiple_architectures_cuda():
 
     src = ASTSource(fn=fp8_convert, signature={"src": "*fp32", "dst": "*fp8e5"}, constexprs={})
     triton.compile(src, target=GPUTarget("cuda", "sm90a", 32))
-    triton.compile(src, target=GPUTarget("cuda", 80, 32))
+    triton.compile(src, target=GPUTarget("cuda", "sm80", 32))

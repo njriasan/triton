@@ -3,7 +3,7 @@
 // CHECK: llvm.atomicrmw fadd
 
 module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32,
-                   ttg.target = "cuda:80",
+                   ttg.target = "cuda:sm80",
                    "ttg.threads-per-warp" = 32 : i32} {
   llvm.mlir.global external @global_smem() {addr_space = 3 : i32, alignment = 16 : i64} : !llvm.array<0 x i8>
   tt.func public @triton_(%arg0: !tt.ptr<i64> {tt.divisibility = 16 : i32},

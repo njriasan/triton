@@ -10,7 +10,7 @@
 #A_DOT = #ttg.dot_op<{opIdx = 0, parent = #C, kWidth=2}>
 #B_DOT = #ttg.dot_op<{opIdx = 1, parent = #C, kWidth=2}>
 
-module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:sm80"} {
 
 // There shouldn't be any aliasing with the dot op encoding.
 tt.func @matmul_loop(%lb : index, %ub : index, %step : index, %A : !tt.ptr<f16>, %B : !tt.ptr<f16>) {

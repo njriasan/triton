@@ -550,7 +550,7 @@ module attributes {{"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = {warp_si
   }}
 }}
 """
-    target = GPUTarget("hip", "gfx942", 64) if is_hip() else GPUTarget("cuda", 80, 32)
+    target = GPUTarget("hip", "gfx942", 64) if is_hip() else GPUTarget("cuda", "sm80", 32)
     with tempfile.TemporaryDirectory() as tmp_dir:
         kernel_path = os.path.join(tmp_dir, "empty_kernel.ttgir")
         with open(kernel_path, "w") as fp:

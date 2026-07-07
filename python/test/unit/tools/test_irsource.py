@@ -1,10 +1,37 @@
 import pathlib
+import pytest
 import triton
 from triton.compiler import IRSource, make_backend
 from triton._C.libtriton import ir
 
 target = triton.runtime.driver.active.get_current_target()
 backend = make_backend(target)
+
+
+def _write_ttgir(tmp_path: pathlib.Path, target: str) -> pathlib.Path:
+    path = tmp_path / "test_irsource_target.ttgir"
+    path.write_text(f"""
+module attributes {{"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "{target}", "ttg.threads-per-warp" = 32 : i32}} {{
+  tt.func public @kernel() {{
+    tt.return
+  }}
+}}
+""")
+    return path
+
+
+def test_irsource_normalizes_numeric_cuda_target(tmp_path: pathlib.Path) -> None:
+    src = IRSource(str(_write_ttgir(tmp_path, f"cuda:{80}")), ir.context(), backend)
+
+    assert src.parse_options()["arch"] == "sm80"
+    assert src.module.get_str_attr("ttg.target") == "cuda:sm80"
+
+
+def test_irsource_rejects_ambiguous_numeric_cuda_target(tmp_path: pathlib.Path) -> None:
+    src = IRSource(str(_write_ttgir(tmp_path, f"cuda:{90}")), ir.context(), backend)
+
+    with pytest.raises(ValueError, match="sm90 is ambiguous"):
+        src.parse_options()
 
 
 def test_mlir_attribute_parsing(tmp_path: pathlib.Path) -> None:
@@ -23,7 +50,7 @@ def test_mlir_attribute_parsing(tmp_path: pathlib.Path) -> None:
 #mma = #ttg.nvidia_mma<{versionMajor = 2, versionMinor = 0, warpsPerCTA = [2, 4], instrShape = [16, 8]}>
 #shared = #ttg.swizzled_shared<{vec = 4, perPhase = 2, maxPhase = 4, order = [1, 0]}>
 #shared1 = #ttg.swizzled_shared<{vec = 8, perPhase = 1, maxPhase = 4, order = [1, 0]}>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:80", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 8 : i32, ttg.target = "cuda:sm80", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @matmul_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32},
                                 %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32},
                                 %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32},

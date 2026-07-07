@@ -983,7 +983,7 @@ tt.func @direct_backedge_within_loop(%arg0: index, %arg1: index, %arg2: index, %
 
 #shared = #ttg.swizzled_shared<{vec = 2, perPhase = 2, maxPhase = 4, order = [1, 0]}>
 
-module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:sm80"} {
 
 // CHECK-LABEL: @membar_alias_through_warp_specialize
 tt.func @membar_alias_through_warp_specialize() {

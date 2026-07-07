@@ -21,7 +21,7 @@ export TRITON_EXT_ENABLED=1;  make dev-install-llvm
 TRITON_PLUGIN_PATHS=/home/triton/python/triton/plugins/libTritonPluginsTestLib.so triton-opt -tritongpu-plugin test/Plugins/test-plugin.mlir
 ```
 ``` MLIR
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm80"} {
   tt.func @foo() {
     tt.return
   }
@@ -30,7 +30,7 @@ module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:80"} {
 
 After the out of tree pass runs, becomes:
 ``` MLIR
-module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm80"} {
   tt.func @bar() {
     tt.return
   }
@@ -72,7 +72,7 @@ Running as is will produce the expected output of printing the TTGIR of the kern
 python test.py
 ```
 ``` MLIR
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @kernel() attributes {noinline = false} {
     tt.return loc(#loc1)
   } loc(#loc)
@@ -89,7 +89,7 @@ TRITON_PLUGIN_PATHS=/home/triton/python/triton/plugins/libTritonPluginsTestLib.s
 ```
 
 ``` MLIR
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @kernel() attributes {noinline = false} {
     tt.return loc(#loc1)
   } loc(#loc)
@@ -169,7 +169,7 @@ TRITON_PLUGIN_PATHS=/home/triton/python/triton/plugins/libTritonPluginsTestLib.s
 Shows the pass ran and modified the kernel name but only after the hook is set. Any kernels before the hook or after the hook is unset are left unchanged.
 
 ``` MLIR
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @kernel() attributes {noinline = false} {
     tt.return loc(#loc1)
   } loc(#loc)
@@ -177,7 +177,7 @@ module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.targ
 #loc = loc("/home/triton/test.py":13:0)
 #loc1 = loc("/home/triton/test.py":14:4)
 
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @foo() attributes {noinline = false} {
     tt.return loc(#loc1)
   } loc(#loc)
@@ -185,7 +185,7 @@ module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.targ
 #loc = loc("/home/triton/test.py":13:0)
 #loc1 = loc("/home/triton/test.py":14:4)
 
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:90", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm90", "ttg.threads-per-warp" = 32 : i32} {
   tt.func public @kernel() attributes {noinline = false} {
     tt.return loc(#loc1)
   } loc(#loc)

@@ -146,7 +146,7 @@ tt.func public @atomic_add_i32(%arg0: !tt.ptr<i32> {tt.divisibility = 16 : i32},
 // -----
 
 #blocked = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:80", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm80", "ttg.threads-per-warp" = 32 : i32} {
 // CHECK-LABEL: @atomic_add_f32_cuda80
 // CHECK-NOT: sizePerThread = [4]
 // CHECK: tt.atomic_rmw fadd, relaxed, gpu, %{{.*}}, %{{.*}}, %{{.*}} : (tensor<1024x!tt.ptr<f32>, #blocked>, tensor<1024xf32, #blocked>, tensor<1024xi1, #blocked>) -> tensor<1024xf32, #blocked>
@@ -170,7 +170,7 @@ tt.func public @atomic_add_f32_cuda80(%arg0: !tt.ptr<f32> {tt.divisibility = 16 
 // -----
 
 #blocked = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [32], warpsPerCTA = [4], order = [0]}>
-module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:80", "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:sm80", "ttg.threads-per-warp" = 32 : i32} {
 // CHECK-LABEL: @atomic_add_f16_cuda80
 // CHECK: ttg.convert_layout %{{.*}} : tensor<1024x!tt.ptr<f16>, #blocked> -> tensor<1024x!tt.ptr<f16>, #[[ATOMIC_F16_LAYOUT:.*]]>
 // CHECK: tt.atomic_rmw fadd, relaxed, gpu, %{{.*}}, %{{.*}}, %{{.*}} : (tensor<1024x!tt.ptr<f16>, #[[ATOMIC_F16_LAYOUT]]>, tensor<1024xf16, #[[ATOMIC_F16_LAYOUT]]>, tensor<1024xi1, #[[ATOMIC_F16_LAYOUT]]>) -> tensor<1024xf16, #[[ATOMIC_F16_LAYOUT]]>

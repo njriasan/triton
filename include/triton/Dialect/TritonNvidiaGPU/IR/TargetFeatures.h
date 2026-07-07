@@ -4,6 +4,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 
 namespace mlir::triton::nvidia_gpu {
@@ -31,6 +32,9 @@ public:
       arch = arch.drop_front(3);
     else if (arch.starts_with("sm"))
       arch = arch.drop_front(2);
+    else
+      llvm::report_fatal_error(
+          "expected CUDA target attribute to use sm<capability>[a]");
 
     if (arch.ends_with("a")) {
       acceleratedFeatures = true;
@@ -39,8 +43,9 @@ public:
 
     int computeCapability;
     bool parseError = arch.getAsInteger(10, computeCapability);
-    assert(!parseError &&
-           "invalid compute capability string in target attribute");
+    if (parseError)
+      llvm::report_fatal_error(
+          "invalid compute capability string in target attribute");
 
     return TargetFeatures(computeCapability, acceleratedFeatures);
   }

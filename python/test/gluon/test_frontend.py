@@ -33,7 +33,7 @@ LIBDEVICE_PAT = re.compile('{libname = "", libpath = "", pure = true, symbol = "
 
 BLACKWELL_TARGET = GPUTarget("cuda", "sm100a", 32)
 HOPPER_TARGET = GPUTarget("cuda", "sm90a", 32)
-AMPERE_TARGET = GPUTarget("cuda", 80, 32)
+AMPERE_TARGET = GPUTarget("cuda", "sm80", 32)
 HIP_TARGET_RDNA3 = GPUTarget("hip", "gfx1100", 32)
 HIP_TARGET_RDNA4 = GPUTarget("hip", "gfx1200", 32)
 HIP_TARGET_CDNA3 = GPUTarget("hip", "gfx942", 64)

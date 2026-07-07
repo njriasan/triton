@@ -13,7 +13,7 @@
 // REQUIRES: triton-ext-enabled
 // XFAIL: *
 
-module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:sm80"} {
   // CHECK-PLUGIN: func @foo()
   tt.func @bar() {
     tt.return
@@ -22,7 +22,7 @@ module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:sm80"} {
   // CHECK-NOFLAG: func @bar()
   tt.func @bar() {
     tt.return
@@ -31,7 +31,7 @@ module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
 
 // -----
 
-module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:80"} {
+module attributes {"ttg.num-warps" = 4 : i32, "ttg.target" = "cuda:sm80"} {
   // CHECK-BASE: func @bar()
   tt.func @bar() {
     tt.return

@@ -82,7 +82,7 @@ module attributes {"ttg.num-warps" = 4 : i32} {
 
 #shared0 = #ttg.nvmma_shared<{swizzlingByteWidth = 32, transposed = false, elementBitWidth = 16}>
 #smem = #ttg.shared_memory
-module attributes {"ttg.target" = "cuda:0", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 1 : i32, "ttg.threads-per-warp" = 32 : i32} {
+module attributes {"ttg.target" = "cuda:sm0", "ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 1 : i32, "ttg.threads-per-warp" = 32 : i32} {
   //CHECK-LABEL: @aref_lowering
   tt.func @aref_lowering(%d : !ttg.memdesc<3x64x16xf16, #shared0, #smem>,
                          %e : !ttg.memdesc<3x16x32xf16, #shared0, #smem>,

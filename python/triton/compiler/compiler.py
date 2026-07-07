@@ -105,6 +105,7 @@ class IRSource:
             self.signature = {k: convert_type_repr(ty) for k, ty in enumerate(types)}
         else:
             self.module = ir.parse_mlir_module(self.path, context)
+            self.module.context = context
             fn_name = self.module.get_entry_func_name()
             self.name = "@" + fn_name
             funcOp = self.module.get_function(fn_name)
@@ -118,6 +119,29 @@ class IRSource:
         self.module.context = context
         return self.module
 
+    def _parse_ttg_target(self, target):
+        backend, arch = target.split(":", 1)
+        if backend != "cuda":
+            return None
+
+        if re.fullmatch(r"\d+", arch):
+            capability = int(arch)
+            if capability >= 90:
+                raise ValueError(f"CUDA target sm{capability} is ambiguous. Use an explicit target string, "
+                                 f"e.g. sm{capability} or sm{capability}a.")
+            arch = f"sm{capability}"
+        elif arch.startswith("sm_"):
+            arch = "sm" + arch[3:]
+
+        if not re.fullmatch(r"sm\d+a?", arch):
+            raise ValueError("CUDA ttg.target must have the form cuda:sm<capability>[a]")
+
+        canonical_target = f"cuda:{arch}"
+        if canonical_target != target:
+            builder = ir.builder(self.module.context)
+            self.module.set_attr("ttg.target", builder.get_string_attr(canonical_target))
+        return arch
+
     def parse_options(self):
         if self.ext == "ttgir":
             num_warps = self.module.get_int_attr("ttg.num-warps")
@@ -128,12 +152,8 @@ class IRSource:
                 options['num_ctas'] = num_ctas
             target = self.module.get_str_attr("ttg.target")
             if target is not None:
-                backend, arch = target.split(":", 1)
-                if backend == "cuda" and re.fullmatch(r"\d+", arch):
-                    # Existing textual TTGIR may still use cuda:80. Backend
-                    # option parsing canonicalizes this to sm80 below.
-                    options['arch'] = arch
-                elif backend == "cuda":
+                arch = self._parse_ttg_target(target)
+                if arch is not None:
                     options['arch'] = arch
             return options
         return dict()

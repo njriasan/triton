@@ -64,7 +64,7 @@ def main():
     parser.add_argument(
         "--target", "-t", type=str, default=None,
         help="The target to compile towards, in format of '<backend>:<arch>:<warp-size>'; "
-        "e.g., 'cuda:sm100a:32', 'cuda:80:32', 'hip:gfx942:64'. Default to None, which means using current machine's GPU target"
+        "e.g., 'cuda:sm100a:32', 'cuda:sm80:32', 'hip:gfx942:64'. Default to None, which means using current machine's GPU target"
     )
     parser.add_argument("--num-warps", "-w", type=int, default=1, help="Number of warps to launch the kernel")
     parser.add_argument("--num-stages", "-ns", type=int, default=3,
