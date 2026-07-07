@@ -40,17 +40,17 @@ static bool isUnsupportedMMAv5Int8Dot(int computeCapability, DotOp op) {
 }
 
 // Get the highest version supported for the hardware and the dot.
-static int getMMAVersionSafe(int computeCapability, bool supportsMMA3,
-                             bool supportsMMA5, DotOp op) {
+static int getMMAVersionSafe(int computeCapability, bool acceleratedFeatures,
+                             DotOp op) {
   // List supported mma version in order of preference.
   SmallVector<int> versionsSupported;
   if (computeCapability < 75) {
     versionsSupported = {1};
   } else if (computeCapability < 90) {
     versionsSupported = {2};
-  } else if (computeCapability < 100 && supportsMMA3) {
+  } else if (computeCapability < 100 && acceleratedFeatures) {
     versionsSupported = {3, 2};
-  } else if (computeCapability < 120 && supportsMMA5) {
+  } else if (computeCapability < 120 && acceleratedFeatures) {
     // Exclude consumer Blackwell (sm120)
     if (isUnsupportedMMAv5Int8Dot(computeCapability, op)) {
       versionsSupported = {2};
@@ -492,14 +492,15 @@ static Value convertDotOperandForMMA(Value v, int opIdx, int bitwidth,
 
 class BlockedToMMA : public mlir::OpRewritePattern<DotOp> {
   int computeCapability;
-  bool supportsMMA3;
+  bool acceleratedFeatures;
   mutable llvm::DenseMap<Operation *, unsigned> dotOpInstNs;
 
 public:
   BlockedToMMA(mlir::MLIRContext *context, int computeCapability,
-               bool supportsMMA3, int benefit)
+               bool acceleratedFeatures, int benefit)
       : OpRewritePattern<DotOp>(context, benefit),
-        computeCapability(computeCapability), supportsMMA3(supportsMMA3) {}
+        computeCapability(computeCapability),
+        acceleratedFeatures(acceleratedFeatures) {}
 
   mlir::LogicalResult
   matchAndRewrite(triton::DotOp dotOp,
@@ -534,8 +535,8 @@ public:
       return failure();
     }
 
-    auto mmaVersion = getMMAVersionSafe(computeCapability, supportsMMA3,
-                                        /*supportsMMA5=*/false, dotOp);
+    auto mmaVersion =
+        getMMAVersionSafe(computeCapability, acceleratedFeatures, dotOp);
     auto mmaResult =
         createMMAEncodingForDot(dotOp, rewriter, computeCapability, mmaVersion);
     if (!(mmaResult.versionMajor >= 1 && mmaResult.versionMajor <= 3))
@@ -635,13 +636,14 @@ static Value splitBOperand(Value b, mlir::PatternRewriter &rewriter) {
 
 class BlockedToMMAv5 : public mlir::OpRewritePattern<DotOp> {
   int computeCapability;
-  bool supportsMMA5;
+  bool acceleratedFeatures;
 
 public:
   BlockedToMMAv5(mlir::MLIRContext *context, int computeCapability,
-                 bool supportsMMA5, int benefit)
+                 bool acceleratedFeatures, int benefit)
       : OpRewritePattern<DotOp>(context, benefit),
-        computeCapability(computeCapability), supportsMMA5(supportsMMA5) {}
+        computeCapability(computeCapability),
+        acceleratedFeatures(acceleratedFeatures) {}
 
   mlir::LogicalResult
   matchAndRewrite(triton::DotOp dotOp,
@@ -656,8 +658,8 @@ public:
     int numWarps = lookupNumWarps(dotOp);
     auto CGALayout = getCGALayout(oldRetType.getEncoding());
 
-    int versionMajor = getMMAVersionSafe(
-        computeCapability, /*supportsMMA3=*/false, supportsMMA5, dotOp);
+    int versionMajor =
+        getMMAVersionSafe(computeCapability, acceleratedFeatures, dotOp);
     if (versionMajor != 5)
       return failure();
     Location loc = dotOp.getLoc();
@@ -820,13 +822,14 @@ public:
 class ScaledBlockedToMMAv5
     : public mlir::OpRewritePattern<triton::DotScaledOp> {
   int computeCapability;
-  bool supportsMMA5;
+  bool acceleratedFeatures;
 
 public:
   ScaledBlockedToMMAv5(mlir::MLIRContext *context, int computeCapability,
-                       bool supportsMMA5, int benefit)
+                       bool acceleratedFeatures, int benefit)
       : mlir::OpRewritePattern<triton::DotScaledOp>(context, benefit),
-        computeCapability(computeCapability), supportsMMA5(supportsMMA5) {}
+        computeCapability(computeCapability),
+        acceleratedFeatures(acceleratedFeatures) {}
 
   mlir::LogicalResult
   matchAndRewrite(triton::DotScaledOp dotOp,
@@ -844,7 +847,8 @@ public:
     auto retShapePerCTA = getShapePerCTA(oldRetType);
     int numWarps = lookupNumWarps(dotOp);
     auto CGALayout = getCGALayout(oldRetType.getEncoding());
-    if (!supportsMMA5 || computeCapability < 100 || computeCapability >= 120)
+    if (!acceleratedFeatures || computeCapability < 100 ||
+        computeCapability >= 120)
       return failure();
     if (numWarps != 4 && numWarps != 8)
       return failure();
@@ -1044,6 +1048,7 @@ public:
 
     auto targetFeatures = triton::nvidia_gpu::TargetFeatures::fromModuleOp(m);
     auto computeCapability = targetFeatures.getComputeCapability();
+    bool acceleratedFeatures = targetFeatures.hasAcceleratedFeatures();
     // We could do this generically if we manage to improve the heuristics
     // reverted in these two PRs https://github.com/triton-lang/triton/pull/5834
     // https://github.com/triton-lang/triton/pull/5837
@@ -1054,12 +1059,12 @@ public:
     constexpr int benefitMMAv5 = 10;
     constexpr int benefitSM120 = 10;
 
-    patterns.add<BlockedToMMA>(context, computeCapability,
-                               targetFeatures.supportMMA3(), benefitDefault);
+    patterns.add<BlockedToMMA>(context, computeCapability, acceleratedFeatures,
+                               benefitDefault);
     patterns.add<ScaledBlockedToMMA>(context, computeCapability, benefitSM120);
     populateDecomposeScaledBlockedPatterns(patterns, benefitDefault);
     patterns.add<BlockedToMMAv5, ScaledBlockedToMMAv5>(
-        context, computeCapability, targetFeatures.supportMMA5(), benefitMMAv5);
+        context, computeCapability, acceleratedFeatures, benefitMMAv5);
 
     if (applyPatternsGreedily(m, std::move(patterns)).failed())
       return signalPassFailure();

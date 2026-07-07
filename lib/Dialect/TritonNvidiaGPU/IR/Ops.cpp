@@ -77,10 +77,14 @@ LogicalResult WarpGroupDotOp::inferReturnTypes(
 LogicalResult WarpGroupDotOp::verify() {
   if (auto moduleOp = getOperation()->getParentOfType<ModuleOp>()) {
     auto targetAttr = moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
-    if (targetAttr && targetAttr.getValue().starts_with("cuda:") &&
-        !TargetFeatures::fromModuleOp(moduleOp).supportMMA3()) {
-      return emitOpError("requires an accelerated NVIDIA target such as sm90a "
-                         "or sm100a");
+    if (targetAttr && targetAttr.getValue().starts_with("cuda:")) {
+      auto targetFeatures = TargetFeatures::fromModuleOp(moduleOp);
+      int computeCapability = targetFeatures.getComputeCapability();
+      if (!targetFeatures.hasAcceleratedFeatures() || computeCapability < 90 ||
+          computeCapability >= 120) {
+        return emitOpError(
+            "requires an accelerated NVIDIA target such as sm90a or sm100a");
+      }
     }
   }
 

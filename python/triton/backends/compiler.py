@@ -1,8 +1,18 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+import functools
+import re
 from typing import Dict, Union
 from types import ModuleType
+
+
+@functools.lru_cache(maxsize=None)
+def _cuda_arch_to_capability(arch: Union[int, str]) -> int:
+    match = re.fullmatch(r"(?:sm_?)?(\d+)(?:a)?", str(arch))
+    if match is None:
+        raise ValueError(f"Invalid CUDA target architecture: {arch}")
+    return int(match.group(1))
 
 
 @dataclass(frozen=True)
@@ -12,6 +22,12 @@ class GPUTarget(object):
     # Target architecture, e.g., 90 (for cuda compute capability), gfx940 (for hip)
     arch: Union[int, str]
     warp_size: int
+
+    @property
+    def capability(self) -> int:
+        if self.backend != "cuda":
+            raise ValueError(f"Target capability is only defined for CUDA targets, got {self.backend}")
+        return _cuda_arch_to_capability(self.arch)
 
 
 class Language(Enum):

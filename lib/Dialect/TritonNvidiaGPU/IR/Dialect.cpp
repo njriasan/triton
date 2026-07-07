@@ -458,10 +458,14 @@ LogicalResult TensorMemoryScalesEncodingAttr::verify(
 LogicalResult impl::verifyMMAv5Op(Operation *op) {
   if (auto moduleOp = op->getParentOfType<ModuleOp>()) {
     auto targetAttr = moduleOp->getAttrOfType<StringAttr>(gpu::AttrTargetName);
-    if (targetAttr && targetAttr.getValue().starts_with("cuda:") &&
-        !TargetFeatures::fromModuleOp(moduleOp).supportMMA5()) {
-      return op->emitOpError(
-          "requires an accelerated NVIDIA target such as sm100a");
+    if (targetAttr && targetAttr.getValue().starts_with("cuda:")) {
+      auto targetFeatures = TargetFeatures::fromModuleOp(moduleOp);
+      int computeCapability = targetFeatures.getComputeCapability();
+      if (!targetFeatures.hasAcceleratedFeatures() || computeCapability < 100 ||
+          computeCapability >= 120) {
+        return op->emitOpError(
+            "requires an accelerated NVIDIA target such as sm100a");
+      }
     }
   }
 

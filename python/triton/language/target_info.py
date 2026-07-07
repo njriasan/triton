@@ -1,6 +1,5 @@
 from triton.runtime import driver
 from triton.runtime.jit import constexpr_function
-import re
 
 __all__ = ["current_target"]
 
@@ -33,14 +32,7 @@ def cuda_capability_geq(major, minor=0):
     target = current_target()
     if target is None or target.backend != "cuda":
         return False
-    arch = target.arch
-    if isinstance(arch, int):
-        capability = arch
-    else:
-        match = re.fullmatch(r"sm_?(\d+)(a?)", arch)
-        assert match is not None
-        capability = int(match.group(1))
-    return capability >= major * 10 + minor
+    return target.capability >= major * 10 + minor
 
 
 @constexpr_function

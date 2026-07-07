@@ -124,17 +124,17 @@ class IRSource:
         if backend != "cuda":
             return None
 
-        if re.fullmatch(r"\d+", arch):
-            capability = int(arch)
-            if capability >= 90:
+        match = re.fullmatch(r"(sm_?)?(\d+)(a?)", arch)
+        if match is None:
+            raise ValueError("CUDA ttg.target must have the form cuda:sm<capability>[a]")
+        prefix, capability, suffix = match.groups()
+        if prefix is None:
+            if suffix:
+                raise ValueError("CUDA ttg.target must have the form cuda:sm<capability>[a]")
+            if int(capability) >= 90:
                 raise ValueError(f"CUDA target sm{capability} is ambiguous. Use an explicit target string, "
                                  f"e.g. sm{capability} or sm{capability}a.")
-            arch = f"sm{capability}"
-        elif arch.startswith("sm_"):
-            arch = "sm" + arch[3:]
-
-        if not re.fullmatch(r"sm\d+a?", arch):
-            raise ValueError("CUDA ttg.target must have the form cuda:sm<capability>[a]")
+        arch = f"sm{capability}{suffix}"
 
         canonical_target = f"cuda:{arch}"
         if canonical_target != target:
