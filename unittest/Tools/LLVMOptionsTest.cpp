@@ -36,9 +36,7 @@ llvm::cl::opt<std::string> stringOption("triton-test-string-option",
 
 using Settings = std::vector<ScopedLLVMOptions::Setting>;
 
-// Since LLVM's start/stop options became TargetPassConfig state snapshotted
-// from the target machine at construction, probe them by building a config
-// for a fixed AMDGPU target each time.
+// Probe start/stop state via a snapshot from a fixed AMDGPU target.
 bool probePassConfig(bool (llvm::TargetPassConfig::*query)() const) {
   static std::once_flag initFlag;
   std::call_once(initFlag, [] {
@@ -48,7 +46,8 @@ bool probePassConfig(bool (llvm::TargetPassConfig::*query)() const) {
   });
   llvm::Triple triple("amdgcn-amd-amdhsa");
   std::string error;
-  const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple, error);
+  const llvm::Target *target =
+      llvm::TargetRegistry::lookupTarget(triple, error);
   EXPECT_NE(target, nullptr) << error;
   std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
       triple, "gfx942", "", llvm::TargetOptions{}, std::nullopt));
@@ -224,8 +223,7 @@ TEST(LLVMOptions, ForkedChildStartsWithFreshRegistry) {
     // This guard belongs to the parent's registry generation. Destroying it
     // must not underflow the child's freshly reset user count.
     parentScope.reset();
-    bool succeeded = !boolOption.getValue() &&
-                     !hasLimitedCodeGenPipeline();
+    bool succeeded = !boolOption.getValue() && !hasLimitedCodeGenPipeline();
     {
       ScopedLLVMOptions childScope(
           Settings{{"triton-test-bool-option", "true"}});

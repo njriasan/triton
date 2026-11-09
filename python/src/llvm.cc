@@ -208,12 +208,11 @@ public:
 
   bool isEnabled() const override { return true; }
 
-  bool shouldRunPass(llvm::StringRef passName,
-                     llvm::StringRef irDescription,
+  bool shouldRunPass(llvm::StringRef passName, llvm::StringRef irDescription,
                      llvm::StringRef funcName) const override {
     return passName != "Loop Strength Reduction" &&
-           (!previousGate.isEnabled() || previousGate.shouldRunPass(
-                                            passName, irDescription, funcName));
+           (!previousGate.isEnabled() ||
+            previousGate.shouldRunPass(passName, irDescription, funcName));
   }
 };
 
