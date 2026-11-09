@@ -209,10 +209,11 @@ public:
   bool isEnabled() const override { return true; }
 
   bool shouldRunPass(llvm::StringRef passName,
-                     llvm::StringRef irDescription) const override {
+                     llvm::StringRef irDescription,
+                     llvm::StringRef funcName) const override {
     return passName != "Loop Strength Reduction" &&
-           (!previousGate.isEnabled() ||
-            previousGate.shouldRunPass(passName, irDescription));
+           (!previousGate.isEnabled() || previousGate.shouldRunPass(
+                                            passName, irDescription, funcName));
   }
 };
 
@@ -678,7 +679,8 @@ void init_triton_llvm(py::module_ &m) {
         if (!arch.empty())
           targetMachine =
               createTargetMachine(mod, arch, enable_fp_fusion, features);
-        PassBuilder pb(/*targetMachine=*/targetMachine.get(), tuningOptions,
+        PassBuilder pb(mod->getContext(),
+                       /*targetMachine=*/targetMachine.get(), tuningOptions,
                        std::nullopt, instrCbPtr);
 
         if (!pluginFile.empty()) {

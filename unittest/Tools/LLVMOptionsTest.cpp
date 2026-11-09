@@ -1,12 +1,18 @@
 #include "triton/Tools/LLVMOptions.h"
 
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/TargetParser/Triple.h"
 
 #include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -29,6 +35,35 @@ llvm::cl::opt<std::string> stringOption("triton-test-string-option",
                                         llvm::cl::Hidden);
 
 using Settings = std::vector<ScopedLLVMOptions::Setting>;
+
+// Since LLVM's start/stop options became TargetPassConfig state snapshotted
+// from the target machine at construction, probe them by building a config
+// for a fixed AMDGPU target each time.
+bool probePassConfig(bool (llvm::TargetPassConfig::*query)() const) {
+  static std::once_flag initFlag;
+  std::call_once(initFlag, [] {
+    LLVMInitializeAMDGPUTargetInfo();
+    LLVMInitializeAMDGPUTarget();
+    LLVMInitializeAMDGPUTargetMC();
+  });
+  llvm::Triple triple("amdgcn-amd-amdhsa");
+  std::string error;
+  const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple, error);
+  EXPECT_NE(target, nullptr) << error;
+  std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
+      triple, "gfx942", "", llvm::TargetOptions{}, std::nullopt));
+  llvm::legacy::PassManager passManager;
+  llvm::TargetPassConfig config(*machine, passManager);
+  return (config.*query)();
+}
+
+bool hasLimitedCodeGenPipeline() {
+  return probePassConfig(&llvm::TargetPassConfig::hasLimitedCodeGenPipeline);
+}
+
+bool willCompleteCodeGenPipeline() {
+  return probePassConfig(&llvm::TargetPassConfig::willCompleteCodeGenPipeline);
+}
 
 // Runs `body` on another thread so tests can check that it blocks.
 class BackgroundTask {
@@ -80,17 +115,17 @@ TEST(LLVMOptions, LastSettingWins) {
 }
 
 TEST(LLVMOptions, LibraryOptionsApplyAndRestore) {
-  EXPECT_FALSE(llvm::TargetPassConfig::hasLimitedCodeGenPipeline());
+  EXPECT_FALSE(hasLimitedCodeGenPipeline());
   {
     ScopedLLVMOptions scope(Settings{{"start-before", "machine-scheduler"},
                                      {"stop-after", "machine-scheduler"},
                                      {"triton-test-bool-option", "true"}});
-    EXPECT_TRUE(llvm::TargetPassConfig::hasLimitedCodeGenPipeline());
-    EXPECT_FALSE(llvm::TargetPassConfig::willCompleteCodeGenPipeline());
+    EXPECT_TRUE(hasLimitedCodeGenPipeline());
+    EXPECT_FALSE(willCompleteCodeGenPipeline());
     EXPECT_TRUE(boolOption.getValue());
   }
-  EXPECT_FALSE(llvm::TargetPassConfig::hasLimitedCodeGenPipeline());
-  EXPECT_TRUE(llvm::TargetPassConfig::willCompleteCodeGenPipeline());
+  EXPECT_FALSE(hasLimitedCodeGenPipeline());
+  EXPECT_TRUE(willCompleteCodeGenPipeline());
   EXPECT_FALSE(boolOption.getValue());
 }
 
@@ -190,7 +225,7 @@ TEST(LLVMOptions, ForkedChildStartsWithFreshRegistry) {
     // must not underflow the child's freshly reset user count.
     parentScope.reset();
     bool succeeded = !boolOption.getValue() &&
-                     !llvm::TargetPassConfig::hasLimitedCodeGenPipeline();
+                     !hasLimitedCodeGenPipeline();
     {
       ScopedLLVMOptions childScope(
           Settings{{"triton-test-bool-option", "true"}});
@@ -207,10 +242,10 @@ TEST(LLVMOptions, ForkedChildStartsWithFreshRegistry) {
   EXPECT_EQ(WEXITSTATUS(status), 0);
   // The child reset must not affect the parent's registry.
   EXPECT_TRUE(boolOption.getValue());
-  EXPECT_TRUE(llvm::TargetPassConfig::hasLimitedCodeGenPipeline());
+  EXPECT_TRUE(hasLimitedCodeGenPipeline());
   parentScope.reset();
   EXPECT_FALSE(boolOption.getValue());
-  EXPECT_FALSE(llvm::TargetPassConfig::hasLimitedCodeGenPipeline());
+  EXPECT_FALSE(hasLimitedCodeGenPipeline());
 }
 #endif
 
