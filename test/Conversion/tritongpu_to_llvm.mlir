@@ -4710,7 +4710,9 @@ module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 1 : i32, "ttg.tar
   // PTX-LABEL: .visible .entry scalar_atomic_float_ops(
   // PTX: atom.global.gpu.relaxed.add.noftz.f16
   // PTX: atom.global.gpu.relaxed.add.noftz.bf16
-  // PTX: atom.relaxed.gpu.global.add.f32
+  // PTX atom.add.f32 flushes denormals on global memory, so without FTZ
+  // NVPTX expands the f32 fadd to a CAS loop instead of the native atom.
+  // PTX: atom.relaxed.gpu.global.cas.b32
   // PTX: atom.relaxed.gpu.global.exch.b32
   // PTX: atom.relaxed.gpu.global.add.f64
   // PTX: atom.relaxed.gpu.global.exch.b64

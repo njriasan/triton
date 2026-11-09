@@ -1067,6 +1067,9 @@ llvm.func @trivial_remat() attributes {allocation.offset = 0 : i32} {
   llvm.return
 }
 
+// The urem capture is not rematerialized into the partition: MLIR now
+// considers urem non-speculatable unless its divisor is provably non-zero,
+// so the value is passed through shared memory instead.
 // COMMON-LABEL: @remat_subgraph
 llvm.func @remat_subgraph(%arg0: i32, %arg1: i32) attributes {allocation.offset = 0 : i32} {
   // COMMON-DAG: [[ADDR:%.*]] = llvm.mlir.addressof @global_smem : !llvm.ptr<3>
@@ -1082,17 +1085,17 @@ llvm.func @remat_subgraph(%arg0: i32, %arg1: i32) attributes {allocation.offset 
   }
   partition0(%arg2: !llvm.ptr<3>, %arg3: i32) num_warps(4) {
   // CHECK: ^bb4:
-    // CHECK-NEXT: [[ADD:%.*]] = llvm.add %arg0, %arg1 : i32
-    // CHECK-NEXT: [[MUL:%.*]] = llvm.mul [[ADD]], %arg1 : i32
-    // CHECK-NEXT: [[UREM:%.*]] = llvm.urem [[ADD]], [[MUL]] : i32
+    // CHECK-NEXT: [[SLOT:%.*]] = llvm.getelementptr [[ADDR]]{{\[}}0, 0{{\]}}
+    // CHECK-NEXT: [[VAL:%.*]] = llvm.load [[SLOT]]
+    // CHECK-NEXT: nvvm.barrier
     // CHECK-NEXT: [[PTR:%.*]] = llvm.getelementptr [[ADDR]][%arg0]
-    // CHECK-NEXT: "use"([[PTR]], [[UREM]])
+    // CHECK-NEXT: "use"([[PTR]], [[VAL]])
   // AMD: ^bb4:
-    // AMD-NEXT: [[ADD:%.*]] = llvm.add %arg0, %arg1 : i32
-    // AMD-NEXT: [[MUL:%.*]] = llvm.mul [[ADD]], %arg1 : i32
-    // AMD-NEXT: [[UREM:%.*]] = llvm.urem [[ADD]], [[MUL]] : i32
+    // AMD-NEXT: [[SLOT:%.*]] = llvm.getelementptr [[ADDR]]{{\[}}0, 0{{\]}}
+    // AMD-NEXT: [[VAL:%.*]] = llvm.load [[SLOT]]
+    // AMD-NEXT: rocdl.barrier
     // AMD-NEXT: [[PTR:%.*]] = llvm.getelementptr [[ADDR]][%arg0]
-    // AMD-NEXT: "use"([[PTR]], [[UREM]])
+    // AMD-NEXT: "use"([[PTR]], [[VAL]])
     "use"(%arg2, %arg3) : (!llvm.ptr<3>, i32) -> ()
     // COMMON-NEXT: llvm.br
     ttg.warp_return
