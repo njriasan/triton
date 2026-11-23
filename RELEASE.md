@@ -8,6 +8,7 @@ The following compatibility matrix reflects the CPython wheels published on PyPI
 
 | Triton version | Python version | Manylinux version |
 | --- | --- | --- |
+| 3.9.0 | >=3.11, <=3.15 | glibc 2.27+ x86-64, AArch64 |
 | 3.8.0 | >=3.10, <=3.14 | glibc 2.27+ x86-64, AArch64 |
 | 3.7.1 | >=3.10, <=3.14 | glibc 2.27+ x86-64, AArch64 |
 | 3.7.0 | >=3.10, <=3.14 | glibc 2.27+ x86-64, AArch64 |
@@ -37,11 +38,6 @@ At the release decision date, validation results determine whether to publish a 
 
 Each Triton target date is one week before the corresponding PyTorch release date. Dates are tentative and follow the [PyTorch release cadence](https://github.com/pytorch/pytorch/blob/main/RELEASE.md#release-cadence).
 
-| PyTorch version | Triton release options | Release decision date | Target release date |
-| --- | --- | --- | --- |
-| 2.15 | 3.9 | --- | Oct 21, 2026 |
-| 2.16 | 3.9.1 or 3.10 | Nov 10, 2026 | Dec 15, 2026 |
-
 Patch releases (`X.Y.1`) are optional and are only published if major regressions are found in the corresponding minor release.
 
 ### Release History
@@ -50,6 +46,7 @@ The following timeline records release branch cuts and the first publication of 
 
 | Minor Version | Release branch cut | Release date | Patch Release date |
 | --- | --- | --- | --- |
+| 3.9.0 | Oct 2026 | Oct 27, 2026 | --- |
 | 3.8.0 | Jun 2026 | Aug 28, 2026 | --- |
 | 3.7.0 | Feb 2026 | May 7, 2026 | Jun 17, 2026 (3.7.1) |
 | 3.6.0 | Nov 2025 | Jan 20, 2026 | --- |
