@@ -324,7 +324,13 @@ bankConflictsLdSt(const LinearLayout &src, const LinearLayout &dst,
 
 int bankConflictsMemDesc(const LinearLayout &reg, const LinearLayout &smem,
                          int32_t bitwidth, int32_t numBanks,
-                         LocalMemOpTile laneTile) {
+                         LocalMemOpTile laneTile,
+                         ArrayRef<unsigned> padIntervals,
+                         ArrayRef<unsigned> paddings) {
+  if (!padIntervals.empty())
+    return bankConflictsMemDescPadded(reg, smem, padIntervals, paddings,
+                                      bitwidth, numBanks, laneTile);
+
   auto *ctx = smem.getInDimNames().begin()->getContext();
   auto S = [ctx](StringRef str) { return StringAttr::get(ctx, str); };
 
@@ -350,6 +356,143 @@ int bankConflictsMemDesc(const LinearLayout &reg, const LinearLayout &smem,
   return bankConflictsLdSt(regNoBroadcast, regNoBroadcast, smemReshaped,
                            bitwidth, numBanks, laneTile, laneTile)
       .first;
+}
+
+int bankConflictsMemDescPadded(const LinearLayout &reg,
+                               const LinearLayout &smem,
+                               ArrayRef<unsigned> padIntervals,
+                               ArrayRef<unsigned> paddings, int32_t bitwidth,
+                               int32_t numBanks, LocalMemOpTile laneTile) {
+  auto *ctx = smem.getInDimNames().begin()->getContext();
+  auto S = [ctx](StringRef str) { return StringAttr::get(ctx, str); };
+  auto kReg = S("register");
+  auto kLane = S("lane");
+  auto kOffset = S("offset");
+
+  assert(smem.hasInDim(kOffset) && "shared layout must have an offset dim");
+  assert(reg.hasInDim(kReg) && "register layout must have a register dim");
+  assert(padIntervals.size() == paddings.size() &&
+         "expected one padding per interval");
+
+  // Maps a linear element offset to its padded element offset.
+  auto pad = [&](uint32_t off) -> int64_t {
+    int64_t padded = off;
+    for (auto [interval, padding] : llvm::zip_equal(padIntervals, paddings))
+      padded += static_cast<int64_t>(off / interval) * padding;
+    return padded;
+  };
+
+  // A vector cannot cross a padding interval, so with padding we cap the
+  // vectorisation at the smallest interval and do not permute registers.
+  std::optional<int> maxVecElems;
+  if (!padIntervals.empty())
+    maxVecElems = std::min<int>(*llvm::min_element(padIntervals),
+                                std::max(1, 128 / bitwidth));
+  auto regNoBroadcast = actionRemoveBroadcastedRegs(reg).apply(reg);
+  auto cvt = regNoBroadcast.invertAndCompose(smem);
+  auto [elemsPerVec, perm] =
+      largestVectorisation(ctx, cvt, bitwidth, maxVecElems);
+  cvt = perm.apply(cvt);
+  int dwordsPerVec = std::max(1, elemsPerVec * bitwidth / 32);
+
+  // Find the offsets read by the lanes that are served together with lane 0
+  // in one cycle. For example, for ds_read_b128 on CDNA4 these are lanes 1, 2,
+  // 12 and 20 and their XOR combinations.
+  SmallVector<int32_t> laneOffsets;
+  for (int i = 0; i < cvt.getInDimSizeLog2(kLane); i++)
+    laneOffsets.push_back(cvt.getBasis(kLane, i, kOffset));
+  auto phase =
+      getLaneTile(laneTile, laneOffsets, elemsPerVec, bitwidth, numBanks);
+
+  // ys is the set containing all XOR combinations from phase. It means all
+  // the offsets read by the first group. Offsets in other groups can be
+  // obtained by their first offset t with t XOR ys.
+  SmallVector<uint32_t> ys = {0};
+  // basis is a different form of phase where each element has distinct
+  // leading bits. The same ys can also be constructed from basis using all
+  // XOR combinations.
+  SmallVector<uint32_t> basis;
+  // dedup(x) XORs x with the elements of basis, from the largest down,
+  // whenever that makes x smaller. It returns 0 when x is in ys.
+  auto dedup = [&](uint32_t x) {
+    for (uint32_t b : llvm::reverse(basis))
+      x = std::min(x, x ^ b);
+    return x;
+  };
+  // For example, if phase is (2, 3), then
+  // - ys is (0, 1, 2, 3)
+  // - basis is (1, 2) - 3 is reduced to 3 ^ 2 = 1
+  // phase and basis build the same ys, but basis has distinct leading bits.
+  // We need to use this property of basis to make dedup correct. With basis,
+  // dedup(1) = 1 ^ 1 = 0, so 1 is found in ys. With phase, each single XOR
+  // makes 1 larger (1 ^ 3 = 2, 1 ^ 2 = 3), so dedup(1) stays 1, although
+  // 1 = 2 ^ 3 is in ys.
+  for (uint32_t y : phase) {
+    uint32_t b = dedup(y);
+    if (b == 0)
+      continue;
+    for (int i = 0, n = ys.size(); i < n; i++)
+      ys.push_back(ys[i] ^ b);
+    basis.push_back(b);
+    llvm::sort(basis);
+  }
+
+  // As mentioned above, a group reads the offsets t XOR ys, and t can be
+  // obtained from cvt. Not every bit of t changes the bank conflicts. Take a
+  // bit position i that is 0 in every element of ys. Setting bit i in t adds
+  // 2^i to every offset of the group, so after padding every offset moves by
+  // the same pad(2^i). If that is a whole number of dwords, every lane moves
+  // by the same number of banks, and the conflicts do not change. keyBits
+  // holds the other bit positions: those that are 1 in some element of ys and
+  // those whose pad(2^i) is not a whole number of dwords.
+  uint32_t keyBits = 0;
+  for (uint32_t y : ys)
+    keyBits |= y;
+  for (int k = 0; k < cvt.getOutDimSizeLog2(kOffset); k++)
+    if (pad(1u << k) * bitwidth % 32 != 0)
+      keyBits |= 1u << k;
+
+  // Now collect the groups to check. Only t & keyBits matters, so each group
+  // is represented by a value of t & keyBits. t is a XOR combination of the
+  // bases of cvt, except the register bases inside the vector, which are
+  // elements of one access. Define ts as the XOR combinations of these bases
+  // masked by keyBits. Build ts one base at a time. If dedup(base & keyBits)
+  // is 0, the base only moves t to a group that ts already has, so skip it.
+  // Otherwise it reaches new groups, so add it to basis and double ts with it.
+  SmallVector<uint32_t> ts = {0};
+  for (auto dim : cvt.getInDimNames()) {
+    int first = dim == kReg ? llvm::Log2_32(elemsPerVec) : 0;
+    for (int i = first; i < cvt.getInDimSizeLog2(dim); i++) {
+      uint32_t g = dedup(cvt.getBasis(dim, i, kOffset) & keyBits);
+      if (!g)
+        continue;
+      basis.push_back(g);
+      llvm::sort(basis);
+      for (int j = 0, n = ts.size(); j < n; j++)
+        ts.push_back(ts[j] ^ g);
+    }
+  }
+
+  // Finally, check each group. Every value in ts is a start offset t of one
+  // group, which reads the offsets t XOR ys. Pad these offsets and collect
+  // the dwords they cover, dwordsPerVec per lane. Lanes that read the same
+  // dword share one access, so count the different dwords in each bank.
+  int maxWays = 1;
+  SmallVector<int> ways(numBanks);
+  llvm::DenseSet<int64_t> dwords;
+  for (uint32_t t : ts) {
+    dwords.clear();
+    for (uint32_t y : ys) {
+      int64_t dword = pad(t ^ y) * bitwidth / 32;
+      for (int d = 0; d < dwordsPerVec; d++)
+        dwords.insert(dword + d);
+    }
+    std::fill(ways.begin(), ways.end(), 0);
+    for (int64_t dword : dwords)
+      maxWays = std::max(maxWays, ++ways[dword % numBanks]);
+  }
+
+  return maxWays - 1;
 }
 
 static std::optional<SmallVector<int32_t>> optimalSwizzlingTile(
