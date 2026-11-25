@@ -2704,6 +2704,17 @@ def test_bank_conflicts(reg_layout, shared_layout, shape, bitwidth, ref_conflict
     run_parser(kernel, args=args, target=AMPERE_TARGET)
 
 
+_MXFP6_A_LANES = [[128], [1024], [2048], [4096], [32], [64]]
+# Byte 8 of each lane goes to a warp so that the reads stay b64.
+_MXFP6_A_B64 = ttgl.DistributedLinearLayout([[1], [2], [4], [16], [512]], _MXFP6_A_LANES, [[8192], [256], [8]], [],
+                                            [16384])
+_MXFP6_A_B128 = ttgl.DistributedLinearLayout([[1], [2], [4], [8], [16], [512]], _MXFP6_A_LANES, [[8192], [256]], [],
+                                             [16384])
+# Lane i reads row i, the registers and warps hold the columns.
+_COLUMN_READ = ttgl.DistributedLinearLayout([[8], [16], [32]], [[64], [128], [256], [512], [1024], [2048]],
+                                            [[1], [2], [4]], [], [4096])
+
+
 @pytest.mark.parametrize("reg_layout, shared_layout, shape, bitwidth, ref_conflicts", [
     # swizzled layouts:
     (ttgl.DotOperandLayout(0, ttgl.amd.AMDMFMALayout(4, [16, 16, 32], True, [2, 2]),
@@ -2742,6 +2753,26 @@ def test_bank_conflicts(reg_layout, shared_layout, shape, bitwidth, ref_conflict
      ttgl.PaddedSharedLayout.with_identity_for([[64, 4]], [256, 64], [1, 0]), [256, 64], 16, 1),
     (ttgl.DotOperandLayout(0, ttgl.amd.AMDMFMALayout(4, [16, 16, 32], True, [2, 2]), k_width=4),
      ttgl.PaddedSharedLayout.with_identity_for([[64, 8]], [256, 64], [1, 0]), [256, 64], 16, 0),
+    # MXFP6 A operand on gfx950: lane t reads 32 bytes from
+    # ((t<<1)&352)|((t<<7)&8320)|((t<<9)&7168), padded by [1024:+16].
+    # ds_read_b64 (sequential phases): 8-way on the linear component, 2-way padded.
+    (_MXFP6_A_B64, ttgl.SwizzledSharedLayout(1, 1, 1, order=[0]), [16384], 8, 7),
+    (_MXFP6_A_B64, ttgl.PaddedSharedLayout.with_identity_for([[1024, 16]], [16384], [0]), [16384], 8, 1),
+    # ds_read_b128 (CDNA4 phases): 4-way on the linear component, 2-way padded.
+    (_MXFP6_A_B128, ttgl.SwizzledSharedLayout(1, 1, 1, order=[0]), [16384], 8, 3),
+    (_MXFP6_A_B128, ttgl.PaddedSharedLayout.with_identity_for([[1024, 16]], [16384], [0]), [16384], 8, 1),
+    # Control: lane t reads 16 bytes at t * 16.
+    (ttgl.DistributedLinearLayout([[1], [2], [4], [8]], [[16], [32], [64], [128], [256], [512]], [[1024], [2048]], [],
+                                  [4096]), ttgl.PaddedSharedLayout.with_identity_for([[1024, 16]], [4096],
+                                                                                     [0]), [4096], 8, 0),
+    # Scalar column read of a row-major 64x64 fp32 tile: [64:+1] removes the conflicts.
+    (_COLUMN_READ, ttgl.SwizzledSharedLayout(1, 1, 1, order=[0]), [4096], 32, 63),
+    (_COLUMN_READ, ttgl.PaddedSharedLayout.with_identity_for([[64, 1]], [4096], [0]), [4096], 32, 0),
+    # Multi-tier padding.
+    (ttgl.BlockedLayout([1, 2], [16, 4], [4, 1], [1, 0]),
+     ttgl.PaddedSharedLayout.with_identity_for([[2, 1], [4, 2]], [64, 64], [1, 0]), [64, 64], 32, 7),
+    (ttgl.BlockedLayout([1, 1], [64, 1], [1, 4], [1, 0]),
+     ttgl.PaddedSharedLayout.with_identity_for([[64, 1], [256, 4]], [64, 64], [1, 0]), [64, 64], 32, 1),
 ])
 def test_bank_conflicts_amd(reg_layout, shared_layout, shape, bitwidth, ref_conflicts):
     dtype = {8: ttgl.int8, 16: ttgl.float16, 32: ttgl.float32}[bitwidth]

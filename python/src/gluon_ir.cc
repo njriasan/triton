@@ -933,9 +933,8 @@ void init_gluon_ir(py::module_ &m) {
                     "srcTile should be empty");
 
              if (padded)
-               return ttg::bankConflictsMemDescPadded(
-                   regLayout, smemLayout, padded.getIntervals(),
-                   padded.getPaddings(), bitwidth, numBanks, dstTile);
+               return bankConflictsMemDescPadded(regLayout, padded, bitwidth,
+                                                 numBanks, dstTile);
              return ttg::bankConflictsMemDesc(regLayout, smemLayout, bitwidth,
                                               numBanks, dstTile);
            })

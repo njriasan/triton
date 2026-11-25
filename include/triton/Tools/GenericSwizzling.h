@@ -66,32 +66,9 @@ llvm::SmallVector<int32_t> getLaneTile(const LocalMemOpTile &tile,
                                        int32_t vecSize, int32_t bitwidth,
                                        int32_t numBanks);
 
-// Returns the bank conflicts (extra wavefronts) of a load or store between the
-// register layout `reg` and the shared layout `smem`.
-//
-// For a padded shared layout, `smem` is its linear component and
-// `padIntervals` / `paddings` are its intervals and paddings in elements, as
-// given by PaddedSharedEncodingAttr::getIntervals() / getPaddings(). Without
-// padding this uses the GF(2) analysis, otherwise it dispatches to
-// bankConflictsMemDescPadded.
 int bankConflictsMemDesc(const LinearLayout &reg, const LinearLayout &smem,
                          int32_t bitwidth, int32_t numBanks = 32,
-                         LocalMemOpTile laneTile = {},
-                         llvm::ArrayRef<unsigned> padIntervals = {},
-                         llvm::ArrayRef<unsigned> paddings = {});
-
-// Same as bankConflictsMemDesc, but counts the conflicts by enumerating the
-// offsets read by the lanes that are served together. Padding is not linear
-// over GF(2): the element at linear offset `off` is stored at
-// off + sum_k (off / padIntervals[k]) * paddings[k], so the GF(2) analysis
-// cannot be used for padded layouts. Without padding this returns the same
-// result as the GF(2) analysis.
-int bankConflictsMemDescPadded(const LinearLayout &reg,
-                               const LinearLayout &smem,
-                               llvm::ArrayRef<unsigned> padIntervals,
-                               llvm::ArrayRef<unsigned> paddings,
-                               int32_t bitwidth, int32_t numBanks = 32,
-                               LocalMemOpTile laneTile = {});
+                         LocalMemOpTile laneTile = {});
 
 std::pair<int, int> bankConflicts(llvm::ArrayRef<int32_t> tileSrc,
                                   llvm::ArrayRef<int32_t> tileDst,

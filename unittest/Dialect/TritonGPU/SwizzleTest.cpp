@@ -7,14 +7,12 @@
 #include "triton/Tools/LinearLayout.h"
 
 #include "mlir/Support/LLVM.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <functional>
 #include <gtest/gtest.h>
 #include <llvm/ADT/SmallSet.h>
-#include <optional>
 
 using namespace mlir;
 using namespace mlir::triton;
@@ -299,119 +297,6 @@ protected:
     // Assert homogeneity
     assert(wavefronts % minWavefronts == 0);
     return wavefronts / minWavefronts - 1;
-  }
-
-  StringAttr S(StringRef str) { return StringAttr::get(&ctx, str); }
-
-  int computeConflictsByEnumeration(ArrayRef<int64_t> shape, Attribute regAttr,
-                                    Attribute sharedAttr, int bitwidth,
-                                    int numBanks = 32,
-                                    LocalMemOpTile laneTile = {}) {
-    return mlir::triton::gpu::bankConflictsMemDescPadded(
-        toLL(shape, regAttr), toLL(shape, sharedAttr), /*padIntervals=*/{},
-        /*paddings=*/{}, bitwidth, numBanks, laneTile);
-  }
-
-  // Worst bank conflicts (extra wavefronts) of accessing the padded shared
-  // layout with linear component `smem` from `reg`. Enumerates every access:
-  // every register vector, warp and phase of lanes. The lanes of phase 0 are
-  // the span of `laneTile.laneMask` (as lane ids) or, if it is empty, the
-  // first lanes that fill all the banks. The other phases are its cosets.
-  int bruteforcePaddedConflicts(const LinearLayout &reg,
-                                const LinearLayout &smem,
-                                ArrayRef<unsigned> intervals,
-                                ArrayRef<unsigned> paddings, int bitwidth,
-                                int numBanks, LocalMemOpTile laneTile = {}) {
-    auto kOffset = S("offset");
-    auto kReg = S("register");
-    auto kLane = S("lane");
-    auto kWarp = S("warp");
-    auto kBlock = S("block");
-    auto cvt = reg.invertAndCompose(smem);
-    cvt = actionRemoveBroadcastedRegs(cvt).apply(cvt);
-    std::optional<int> maxVecElems;
-    if (!intervals.empty())
-      maxVecElems =
-          std::min<int>(*llvm::min_element(intervals), 128 / bitwidth);
-    auto [elemsPerVec, perm] =
-        largestVectorisation(&ctx, cvt, bitwidth, maxVecElems);
-    cvt = perm.apply(cvt);
-
-    int numLanes = cvt.getInDimSize(kLane);
-    SmallVector<int> phaseLanes = {0};
-    auto addToSpan = [&](int laneId) {
-      for (int i = 0, n = phaseLanes.size(); i < n; i++)
-        phaseLanes.push_back(phaseLanes[i] ^ laneId);
-    };
-    if (!laneTile.laneMask.empty()) {
-      for (int32_t mask : laneTile.laneMask)
-        addToSpan(mask);
-    } else {
-      int dwordsPerVec = std::max(1, elemsPerVec * bitwidth / 32);
-      int lanesPerPhase = std::min(numLanes, numBanks / dwordsPerVec);
-      for (int l = 1; l < lanesPerPhase; l *= 2)
-        addToSpan(l);
-    }
-
-    auto padOffset = [&](int64_t off) {
-      int64_t padded = off;
-      for (auto [interval, padding] : llvm::zip_equal(intervals, paddings))
-        padded += (off / interval) * padding;
-      return padded;
-    };
-
-    int maxWays = 1;
-    for (int r = 0; r < cvt.getInDimSize(kReg); r += elemsPerVec) {
-      for (int w = 0; w < cvt.getInDimSize(kWarp); w++) {
-        for (int l0 = 0; l0 < numLanes; l0++) {
-          llvm::DenseSet<int64_t> dwords;
-          for (int p : phaseLanes) {
-            for (int v = 0; v < elemsPerVec; v++) {
-              auto outs = cvt.apply(
-                  {{kReg, r + v}, {kLane, l0 ^ p}, {kWarp, w}, {kBlock, 0}});
-              int64_t off = 0;
-              for (auto [dim, val] : outs)
-                if (dim == kOffset)
-                  off = val;
-              dwords.insert(padOffset(off) * bitwidth / 32);
-            }
-          }
-          SmallVector<int> ways(numBanks, 0);
-          for (int64_t dword : dwords)
-            maxWays = std::max(maxWays, ++ways[dword % numBanks]);
-        }
-      }
-    }
-    return maxWays - 1;
-  }
-
-  // Checks bankConflictsMemDescPadded against the brute force, with and
-  // without padding, and the GF(2) analysis without padding.
-  void checkPadded(const LinearLayout &reg, const LinearLayout &smem,
-                   ArrayRef<unsigned> intervals, ArrayRef<unsigned> paddings,
-                   int bitwidth, int numBanks, LocalMemOpTile laneTile = {}) {
-    using mlir::triton::gpu::bankConflictsMemDesc;
-    using mlir::triton::gpu::bankConflictsMemDescPadded;
-    int linear = bruteforcePaddedConflicts(reg, smem, {}, {}, bitwidth,
-                                           numBanks, laneTile);
-    int padded = bruteforcePaddedConflicts(reg, smem, intervals, paddings,
-                                           bitwidth, numBanks, laneTile);
-    EXPECT_EQ(bankConflictsMemDesc(reg, smem, bitwidth, numBanks, laneTile),
-              linear)
-        << reg.invertAndCompose(smem);
-    EXPECT_EQ(bankConflictsMemDescPadded(reg, smem, {}, {}, bitwidth, numBanks,
-                                         laneTile),
-              linear)
-        << reg.invertAndCompose(smem);
-    EXPECT_EQ(bankConflictsMemDescPadded(reg, smem, intervals, paddings,
-                                         bitwidth, numBanks, laneTile),
-              padded)
-        << reg.invertAndCompose(smem);
-    // bankConflictsMemDesc dispatches to the padded analysis.
-    EXPECT_EQ(bankConflictsMemDesc(reg, smem, bitwidth, numBanks, laneTile,
-                                   intervals, paddings),
-              padded)
-        << reg.invertAndCompose(smem);
   }
 };
 
@@ -775,11 +660,6 @@ TEST_F(BankConflictTest, bankConflicts) {
   };
 
   for (const auto &c : cases) {
-    EXPECT_EQ(
-        computeConflictsByEnumeration(c.shape, c.reg, c.shared, c.bitwidth),
-        computeConflicts(c.shape, c.reg, c.shared, c.bitwidth))
-        << attrStr(c.reg) << "\n"
-        << attrStr(c.shared);
     EXPECT_EQ(computeConflicts(c.shape, c.reg, c.shared, c.bitwidth),
               bruteforceBankConflictsPerWavefront(c.shape, c.reg, c.shared,
                                                   c.bitwidth))
@@ -865,12 +745,6 @@ TEST_F(BankConflictTest, bankConflictsWavefront64) {
   };
 
   for (const auto &c : cases) {
-    EXPECT_EQ(computeConflictsByEnumeration(c.shape, c.reg, c.shared,
-                                            c.bitwidth, c.numBanks, c.laneTile),
-              computeConflicts(c.shape, c.reg, c.shared, c.bitwidth, c.numBanks,
-                               c.laneTile))
-        << attrStr(c.reg) << "\n"
-        << attrStr(c.shared);
     EXPECT_EQ(computeConflicts(c.shape, c.reg, c.shared, c.bitwidth, c.numBanks,
                                c.laneTile),
               bruteforceBankConflictsPerWavefront64(c.shape, c.reg, c.shared,
@@ -880,190 +754,6 @@ TEST_F(BankConflictTest, bankConflictsWavefront64) {
         << "numBanks=" << c.numBanks << "\n"
         << attrStr(c.reg) << "\n"
         << attrStr(c.shared);
-  }
-}
-
-// The A operand of an MXFP6 interwave kernel on gfx950 uses
-// #ttg.padded_shared<[1024:+16]> over bytes. Each lane reads 32 contiguous
-// bytes, from byte ((t<<1)&352)|((t<<7)&8320)|((t<<9)&7168) for thread t.
-// Ignoring the padding overestimates the conflicts; the padded counts match
-// SQ_LDS_BANK_CONFLICT measurements on MI350X.
-TEST_F(BankConflictTest, paddedMxfp6AOperand) {
-  using mlir::triton::gpu::bankConflictsMemDesc;
-  using mlir::triton::gpu::bankConflictsMemDescPadded;
-  auto kReg = S("register");
-  auto kLane = S("lane");
-  auto kWarp = S("warp");
-  auto kBlock = S("block");
-  auto kDim = S("dim0");
-  auto smem = LinearLayout::identity1D(16384, S("offset"), kDim) *
-              LinearLayout::identity1D(1, kBlock, kDim);
-  SmallVector<unsigned> intervals = {1024};
-  SmallVector<unsigned> paddings = {16};
-  std::vector<std::vector<int32_t>> lane = {{128},  {1024}, {2048},
-                                            {4096}, {32},   {64}};
-
-  // ds_read_b64 with phases of 32 sequential lanes. Byte 8 of each lane is
-  // read by another warp so that the reads do not vectorise to b128.
-  auto regB64 = LinearLayout({{kReg, {{1}, {2}, {4}, {16}, {512}}},
-                              {kLane, lane},
-                              {kWarp, {{8192}, {256}, {8}}},
-                              {kBlock, {}}},
-                             {kDim});
-  // 8-way ignoring the padding, 2-way with it.
-  EXPECT_EQ(bankConflictsMemDesc(regB64, smem, /*bitwidth=*/8,
-                                 /*numBanks=*/64),
-            7);
-  EXPECT_EQ(bankConflictsMemDescPadded(regB64, smem, intervals, paddings,
-                                       /*bitwidth=*/8, /*numBanks=*/64),
-            1);
-  checkPadded(regB64, smem, intervals, paddings, /*bitwidth=*/8,
-              /*numBanks=*/64);
-
-  // ds_read_b128 with the CDNA4 phases.
-  LocalMemOpTile cdna4B128 = {{}, {}, {1, 2, 12, 20}};
-  auto regB128 = LinearLayout({{kReg, {{1}, {2}, {4}, {8}, {16}, {512}}},
-                               {kLane, lane},
-                               {kWarp, {{8192}, {256}}},
-                               {kBlock, {}}},
-                              {kDim});
-  // 4-way ignoring the padding, 2-way with it.
-  EXPECT_EQ(bankConflictsMemDesc(regB128, smem, /*bitwidth=*/8,
-                                 /*numBanks=*/64, cdna4B128),
-            3);
-  EXPECT_EQ(bankConflictsMemDescPadded(regB128, smem, intervals, paddings,
-                                       /*bitwidth=*/8, /*numBanks=*/64,
-                                       cdna4B128),
-            1);
-  checkPadded(regB128, smem, intervals, paddings, /*bitwidth=*/8,
-              /*numBanks=*/64, cdna4B128);
-
-  // Control: lane t reads 16 bytes at t * 16. Conflict free.
-  auto smemCtrl = LinearLayout::identity1D(4096, S("offset"), kDim) *
-                  LinearLayout::identity1D(1, kBlock, kDim);
-  auto regCtrl = LinearLayout({{kReg, {{1}, {2}, {4}, {8}}},
-                               {kLane, {{16}, {32}, {64}, {128}, {256}, {512}}},
-                               {kWarp, {{1024}, {2048}}},
-                               {kBlock, {}}},
-                              {kDim});
-  EXPECT_EQ(bankConflictsMemDescPadded(regCtrl, smemCtrl, intervals, paddings,
-                                       /*bitwidth=*/8, /*numBanks=*/64,
-                                       cdna4B128),
-            0);
-  checkPadded(regCtrl, smemCtrl, intervals, paddings, /*bitwidth=*/8,
-              /*numBanks=*/64, cdna4B128);
-}
-
-// Classic +1 padding: the lanes read a column of a row-major 32x32 fp32 tile.
-TEST_F(BankConflictTest, paddedColumnAccess) {
-  using mlir::triton::gpu::bankConflictsMemDesc;
-  using mlir::triton::gpu::bankConflictsMemDescPadded;
-  auto kDim = S("dim0");
-  auto kBlock = S("block");
-  auto smem = LinearLayout::identity1D(2048, S("offset"), kDim) *
-              LinearLayout::identity1D(1, kBlock, kDim);
-  // Lane i reads row i. The warps hold the columns, so the reads are scalar.
-  auto reg = LinearLayout({{S("register"), {{1024}}},
-                           {S("lane"), {{32}, {64}, {128}, {256}, {512}}},
-                           {S("warp"), {{1}, {2}, {4}, {8}, {16}}},
-                           {kBlock, {}}},
-                          {kDim});
-  // Without padding all the rows start in the same bank.
-  EXPECT_EQ(bankConflictsMemDesc(reg, smem, /*bitwidth=*/32), 31);
-  // [32:+1] moves each row by one bank.
-  EXPECT_EQ(bankConflictsMemDescPadded(reg, smem, {32}, {1}, /*bitwidth=*/32),
-            0);
-  checkPadded(reg, smem, {32}, {1}, /*bitwidth=*/32, /*numBanks=*/32);
-  checkPadded(reg, smem, {32}, {2}, /*bitwidth=*/32, /*numBanks=*/32);
-  checkPadded(reg, smem, {64}, {1}, /*bitwidth=*/32, /*numBanks=*/32);
-}
-
-// Multi-tier padding, which composes additively, and padding on top of a
-// swizzled linear component.
-TEST_F(BankConflictTest, paddedMultiTierAndSwizzle) {
-  using mlir::triton::gpu::DotOperandEncodingAttr;
-  using mlir::triton::gpu::SwizzledSharedEncodingAttr;
-  auto cga2 = mlir::triton::gpu::CGAEncodingAttr::get1CTALayout(&ctx, 2);
-  auto mmaV4 = mfma(4, {4, 1}, {32, 32, 16}, true);
-  auto dotAV4 =
-      DotOperandEncodingAttr::get(&ctx, /*opIdx=*/0, mmaV4, /*kWidth=*/8);
-  auto dotBV4 =
-      DotOperandEncodingAttr::get(&ctx, /*opIdx=*/1, mmaV4, /*kWidth=*/8);
-  LocalMemOpTile cdna4B128 = {{}, {}, {1, 2, 12, 20}};
-
-  struct Case {
-    Attribute reg;
-    Attribute shared;
-    SmallVector<int64_t, 2> shape;
-    int bitwidth;
-    SmallVector<unsigned> intervals;
-    SmallVector<unsigned> paddings;
-    int numBanks;
-    LocalMemOpTile laneTile;
-  };
-  auto identity = SwizzledSharedEncodingAttr::get(&ctx, 1, 1, 1, {1, 0}, cga2);
-  auto swizzled = SwizzledSharedEncodingAttr::get(&ctx, 8, 1, 8, {1, 0}, cga2);
-  SmallVector<Case, 8> cases = {
-      // Multi-tier padding.
-      {blocked({1, 2}, {16, 4}, {4, 1}, {1, 0}),
-       identity,
-       {64, 64},
-       32,
-       {2, 4},
-       {1, 2},
-       64,
-       {}},
-      {blocked({1, 1}, {64, 1}, {1, 4}, {1, 0}),
-       identity,
-       {64, 64},
-       32,
-       {64, 256},
-       {1, 4},
-       64,
-       {}},
-      {blocked({4, 1}, {16, 4}, {1, 4}, {0, 1}),
-       identity,
-       {128, 64},
-       16,
-       {64, 512},
-       {4, 8},
-       32,
-       {}},
-      {dotAV4, identity, {128, 128}, 16, {128, 1024}, {8, 16}, 64, cdna4B128},
-      // Swizzle plus padding.
-      {dotAV4, swizzled, {128, 128}, 16, {512}, {8}, 64, cdna4B128},
-      {dotBV4, swizzled, {128, 128}, 16, {256, 1024}, {8, 4}, 64, cdna4B128},
-      {blocked({1, 8}, {4, 16}, {4, 1}, {1, 0}),
-       swizzled,
-       {128, 128},
-       16,
-       {128},
-       {8},
-       64,
-       cdna4B128},
-      {blocked({1, 8}, {4, 16}, {4, 1}, {1, 0}),
-       swizzled,
-       {128, 128},
-       16,
-       {64, 2048},
-       {2, 8},
-       32,
-       {}},
-  };
-  for (const auto &c : cases) {
-    SCOPED_TRACE(attrStr(c.reg) + "\n" + attrStr(c.shared));
-    auto reg = toLL(c.shape, c.reg);
-    auto smem = toLL(c.shape, c.shared);
-    // The CDNA4 tile only describes ds_read_b128, like getSharedLdStTiles.
-    auto laneTile = c.laneTile;
-    auto cvt = reg.invertAndCompose(smem);
-    auto [elemsPerVec, perm] = largestVectorisation(
-        &ctx, cvt, c.bitwidth,
-        std::min<int>(*llvm::min_element(c.intervals), 128 / c.bitwidth));
-    if (elemsPerVec * c.bitwidth != 128)
-      laneTile = {};
-    checkPadded(reg, smem, c.intervals, c.paddings, c.bitwidth, c.numBanks,
-                laneTile);
   }
 }
 
